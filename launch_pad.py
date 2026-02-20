@@ -2,12 +2,13 @@ import re
 import shlex
 import subprocess
 import time
+from argparse import ArgumentParser
 from pathlib import Path
 
 from agents import AGENTS
 from config import read_config
 from data_models import WorkItem
-from sources import SOURCES
+from sources import BaseSource, SOURCE_TYPES
 
 
 def _confirm_work_items(work_items: list[WorkItem]) -> list[WorkItem]:
@@ -23,10 +24,10 @@ def _confirm_work_items(work_items: list[WorkItem]) -> list[WorkItem]:
     return confirmed
 
 
-def _get_work_items() -> list[WorkItem]:
+def _get_work_items(sources: list[BaseSource]) -> list[WorkItem]:
     work_items: list[WorkItem] = []
 
-    for source in SOURCES:
+    for source in sources:
         work_items.extend(source.get_work_items())
 
     return work_items
@@ -173,8 +174,8 @@ def _start_agent_in_context(
     )
 
 
-def launch():
-    for work_item in _get_work_items():
+def launch(sources: list[BaseSource]):
+    for work_item in _get_work_items(sources):
         context_path = _create_context(work_item)
         for agent in AGENTS:
             prompt = agent.generate_prompt(work_item)
@@ -182,4 +183,15 @@ def launch():
 
 
 if __name__ == "__main__":
-    launch()
+    parser = ArgumentParser(
+        description="Launch agent workflows from one or more work-item sources."
+    )
+    for source_type in SOURCE_TYPES:
+        source_type.add_arguments(parser)
+    args = parser.parse_args()
+
+    sources: list[BaseSource] = []
+    for source_type in SOURCE_TYPES:
+        sources.extend(source_type.from_args(args))
+
+    launch(sources)
