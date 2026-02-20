@@ -18,6 +18,8 @@ todo: ...
 
 You can load work items directly from GitHub issues:
 
+Set `GITHUB_ACCESS_TOKEN` in your environment if queries need private-repo access.
+
 ```bash
 # Pull issues using a GitHub issue query for one repo
 python launch_pad.py --github-issue-query "repo:owner/repo is:open label:bug sort:updated-desc"
@@ -28,6 +30,19 @@ python launch_pad.py \
   --github-issue-query "repo:owner/repo-a is:open assignee:@me" \
   --github-issue-query "org:owner is:open label:bug"
 ```
+
+### Jira Sources
+
+You can load work items from Jira using JQL:
+
+```bash
+python launch_pad.py --jira-jql "project = CORE AND status = 'Ready for Dev' ORDER BY created DESC"
+```
+
+Required environment/config for Jira:
+
+- Set `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment.
+- Set `jira.org_name` in `config.toml` (or set `JIRA_ORG_NAME` in the environment).
 
 ## Principles
 

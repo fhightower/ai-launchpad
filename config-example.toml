@@ -1,3 +1,6 @@
 base_contexts_dir = ""
 base_source_dir = ""
 custom_agent_message = ""
+
+[jira]
+org_name = ""

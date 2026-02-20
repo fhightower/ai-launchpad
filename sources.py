@@ -5,12 +5,22 @@ from typing import Any
 from urllib.parse import urlencode
 
 import requests
+from requests.auth import HTTPBasicAuth
 
+from config import read_config
 from data_models import WorkItem
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100
 GITHUB_TIMEOUT_SECONDS = 20
+GITHUB_ACCESS_TOKEN_ENV_VAR = "GITHUB_ACCESS_TOKEN"
+
+JIRA_SEARCH_ENDPOINT = "/rest/api/3/search/jql"
+JIRA_PAGE_SIZE = 100
+JIRA_TIMEOUT_SECONDS = 20
+JIRA_EMAIL_ENV_VAR = "JIRA_EMAIL"
+JIRA_API_TOKEN_ENV_VAR = "JIRA_API_TOKEN"
+JIRA_ORG_NAME_ENV_VAR = "JIRA_ORG_NAME"
 
 
 class BaseSource:
@@ -74,7 +84,7 @@ class GitHubIssuesSource(BaseSource):
                 "X-GitHub-Api-Version": "2022-11-28",
             }
         )
-        github_access_token = os.environ.get(GITHUB_ACCESS_TOKEN, "").strip()
+        github_access_token = os.environ.get(GITHUB_ACCESS_TOKEN_ENV_VAR, "").strip()
         if github_access_token:
             self._session.headers["Authorization"] = f"Bearer {github_access_token}"
 
@@ -222,7 +232,170 @@ class GitHubIssuesSource(BaseSource):
         return f"{parts[0]}/{parts[1]}"
 
 
+class JiraJqlSource(BaseSource):
+    def __init__(self, jql: str) -> None:
+        self.jql = jql.strip()
+        if not self.jql:
+            raise ValueError("Jira JQL cannot be empty.")
+
+        jira_section = read_config().get("jira", {})
+        configured_org_name = str(jira_section.get("org_name") or "").strip()
+        org_name = (
+            os.environ.get(JIRA_ORG_NAME_ENV_VAR, "").strip() or configured_org_name
+        )
+        if not org_name:
+            raise ValueError(
+                "Set jira.org_name in config.toml or JIRA_ORG_NAME in the environment."
+            )
+
+        email = os.environ.get(JIRA_EMAIL_ENV_VAR, "").strip()
+        api_token = os.environ.get(JIRA_API_TOKEN_ENV_VAR, "").strip()
+        if not email or not api_token:
+            raise ValueError(
+                "JIRA_EMAIL and JIRA_API_TOKEN environment variables must be set."
+            )
+
+        self.base_url = f"https://{org_name}.atlassian.net"
+        self._session = requests.Session()
+        self._session.auth = HTTPBasicAuth(email, api_token)
+        self._session.headers.update({"Accept": "application/json"})
+
+    @classmethod
+    def add_arguments(cls, parser: ArgumentParser) -> None:
+        parser.add_argument(
+            "--jira-jql",
+            action="append",
+            default=None,
+            metavar="JQL",
+            help=(
+                "Jira JQL query (can be repeated), "
+                "for example: --jira-jql \"project = CORE AND status = 'Ready for Dev'\"."
+            ),
+        )
+
+    @classmethod
+    def from_args(cls, args: Namespace) -> list["BaseSource"]:
+        jql_queries = args.jira_jql or []
+        if not jql_queries:
+            return []
+
+        return [cls(jql=jql) for jql in jql_queries]
+
+    def get_work_items(self) -> list[WorkItem]:
+        issues = self._fetch_issues()
+        return [self._issue_to_work_item(issue) for issue in issues]
+
+    def _get_json(self, endpoint: str, params: dict[str, Any]) -> Any:
+        url = self.base_url + endpoint
+        try:
+            response = self._session.get(
+                url,
+                params=params,
+                timeout=JIRA_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else "?"
+            detail = exc.response.text if exc.response is not None else str(exc)
+            raise RuntimeError(
+                f"Jira API request failed ({status_code}) for {url}: {detail}"
+            ) from exc
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Jira API request failed for {url}: {exc}") from exc
+
+    def _fetch_issues(self) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        start_at = 0
+        while True:
+            payload = self._get_json(
+                JIRA_SEARCH_ENDPOINT,
+                params={
+                    "jql": self.jql,
+                    "fields": "summary,description,components",
+                    "maxResults": JIRA_PAGE_SIZE,
+                    "startAt": start_at,
+                },
+            )
+            if not isinstance(payload, dict):
+                raise RuntimeError(
+                    f"Unexpected Jira search response for JQL '{self.jql}': expected an object."
+                )
+
+            page = payload.get("issues")
+            if not isinstance(page, list):
+                raise RuntimeError(
+                    f"Unexpected Jira search response for JQL '{self.jql}': missing issues list."
+                )
+
+            issues.extend(page)
+            if not page:
+                break
+
+            start_at += len(page)
+            total = payload.get("total")
+            if isinstance(total, int) and start_at >= total:
+                break
+
+        return issues
+
+    def _issue_to_work_item(self, issue: dict[str, Any]) -> WorkItem:
+        fields = issue.get("fields")
+        if not isinstance(fields, dict):
+            fields = {}
+
+        key = str(issue.get("key") or "").strip()
+        summary = str(fields.get("summary") or "").strip()
+        if key and summary:
+            title = f"{key}: {summary}"
+        elif key:
+            title = key
+        elif summary:
+            title = summary
+        else:
+            title = "Jira issue"
+
+        description = (
+            self._extract_adf_text(fields.get("description"))
+            or "No description provided."
+        )
+        link = f"{self.base_url}/browse/{key}" if key else self.base_url
+        return WorkItem(
+            title=title,
+            description=description,
+            link=link,
+            relevant_source_directories=self._extract_components(fields),
+        )
+
+    def _extract_adf_text(self, node: Any) -> str:
+        if isinstance(node, str):
+            return node.strip()
+        if not isinstance(node, dict):
+            return ""
+        if node.get("type") == "text":
+            return str(node.get("text") or "")
+        child_text = [
+            self._extract_adf_text(child) for child in node.get("content", [])
+        ]
+        return "\n".join(text for text in child_text if text).strip()
+
+    @staticmethod
+    def _extract_components(fields: dict[str, Any]) -> list[str]:
+        components = fields.get("components")
+        if not isinstance(components, list):
+            return []
+        names: list[str] = []
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            name = str(component.get("name") or "").strip()
+            if name:
+                names.append(name)
+        return names
+
+
 SOURCE_TYPES: list[type[BaseSource]] = [
     LocalTodoFileSource,
     GitHubIssuesSource,
+    JiraJqlSource,
 ]
