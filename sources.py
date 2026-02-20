@@ -1,4 +1,5 @@
 import os
+from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Any
@@ -12,18 +13,17 @@ from data_models import WorkItem
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100
-GITHUB_TIMEOUT_SECONDS = 20
+REQUEST_TIMEOUT_SECONDS = 20
 GITHUB_ACCESS_TOKEN_ENV_VAR = "GITHUB_ACCESS_TOKEN"
 
 JIRA_SEARCH_ENDPOINT = "/rest/api/3/search/jql"
 JIRA_PAGE_SIZE = 100
-JIRA_TIMEOUT_SECONDS = 20
 JIRA_EMAIL_ENV_VAR = "JIRA_EMAIL"
 JIRA_API_TOKEN_ENV_VAR = "JIRA_API_TOKEN"
 JIRA_ORG_NAME_ENV_VAR = "JIRA_ORG_NAME"
 
 
-class BaseSource:
+class BaseSource(ABC):
     @classmethod
     def add_arguments(cls, parser: ArgumentParser) -> None:
         pass
@@ -32,8 +32,22 @@ class BaseSource:
     def from_args(cls, args: Namespace) -> list["BaseSource"]:
         return []
 
-    def get_work_items(self) -> list[WorkItem]:
-        raise NotImplementedError("This should be implemented by each child class")
+    @abstractmethod
+    def get_work_items(self) -> list[WorkItem]: ...
+
+    @staticmethod
+    def _handle_request_error(
+        exc: requests.RequestException, url: str, source_name: str
+    ) -> None:
+        if isinstance(exc, requests.HTTPError):
+            status_code = exc.response.status_code if exc.response is not None else "?"
+            detail = exc.response.text if exc.response is not None else str(exc)
+            raise RuntimeError(
+                f"{source_name} API request failed ({status_code}) for {url}: {detail}"
+            ) from exc
+        raise RuntimeError(
+            f"{source_name} API request failed for {url}: {exc}"
+        ) from exc
 
 
 class LocalTodoFileSource(BaseSource):
@@ -121,17 +135,11 @@ class GitHubIssuesSource(BaseSource):
 
     def _get_json(self, url: str) -> Any:
         try:
-            response = self._session.get(url, timeout=GITHUB_TIMEOUT_SECONDS)
+            response = self._session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
             response.raise_for_status()
             return response.json()
-        except requests.HTTPError as exc:
-            status_code = exc.response.status_code if exc.response is not None else "?"
-            detail = exc.response.text if exc.response is not None else str(exc)
-            raise RuntimeError(
-                f"GitHub API request failed ({status_code}) for {url}: {detail}"
-            ) from exc
         except requests.RequestException as exc:
-            raise RuntimeError(f"GitHub API request failed for {url}: {exc}") from exc
+            self._handle_request_error(exc, url, "GitHub")
 
     def _fetch_issues_from_search(self) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []
@@ -194,18 +202,13 @@ class GitHubIssuesSource(BaseSource):
         )
 
     def _repo_info_from_issue(self, issue: dict[str, Any]) -> tuple[str, str]:
-        repository_url = str(issue.get("repository_url") or "").strip()
-        repo_from_api = self._owner_repo_from_api_url(repository_url)
-        if repo_from_api:
-            owner_repo = repo_from_api
+        owner_repo = self._owner_repo_from_api_url(
+            str(issue.get("repository_url") or "").strip()
+        ) or self._owner_repo_from_issue_url(
+            str(issue.get("html_url") or "").strip()
+        )
+        if owner_repo:
             return owner_repo, owner_repo.split("/", maxsplit=1)[1]
-
-        issue_link = str(issue.get("html_url") or "").strip()
-        repo_from_html = self._owner_repo_from_issue_url(issue_link)
-        if repo_from_html:
-            owner_repo = repo_from_html
-            return owner_repo, owner_repo.split("/", maxsplit=1)[1]
-
         return "", ""
 
     @staticmethod
@@ -245,14 +248,14 @@ class JiraJqlSource(BaseSource):
         )
         if not org_name:
             raise ValueError(
-                "Set jira.org_name in config.toml or JIRA_ORG_NAME in the environment."
+                f"Set jira.org_name in config.toml or {JIRA_ORG_NAME_ENV_VAR} in the environment."
             )
 
         email = os.environ.get(JIRA_EMAIL_ENV_VAR, "").strip()
         api_token = os.environ.get(JIRA_API_TOKEN_ENV_VAR, "").strip()
         if not email or not api_token:
             raise ValueError(
-                "JIRA_EMAIL and JIRA_API_TOKEN environment variables must be set."
+                f"{JIRA_EMAIL_ENV_VAR} and {JIRA_API_TOKEN_ENV_VAR} environment variables must be set."
             )
 
         self.base_url = f"https://{org_name}.atlassian.net"
@@ -291,18 +294,12 @@ class JiraJqlSource(BaseSource):
             response = self._session.get(
                 url,
                 params=params,
-                timeout=JIRA_TIMEOUT_SECONDS,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
             return response.json()
-        except requests.HTTPError as exc:
-            status_code = exc.response.status_code if exc.response is not None else "?"
-            detail = exc.response.text if exc.response is not None else str(exc)
-            raise RuntimeError(
-                f"Jira API request failed ({status_code}) for {url}: {detail}"
-            ) from exc
         except requests.RequestException as exc:
-            raise RuntimeError(f"Jira API request failed for {url}: {exc}") from exc
+            self._handle_request_error(exc, url, "Jira")
 
     def _fetch_issues(self) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []

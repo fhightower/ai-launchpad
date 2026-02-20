@@ -7,19 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0]
+## 0.3.0
 
 ### Added
 
 - `--jira-jql` source support for fetching Jira issues and mapping them to work items.
 
-## [0.2.0]
+## 0.2.0
 
 ### Added
 
 - Source support for local todo files and Github issues
 
-## [0.1.0]
+## 0.1.0
 
 ### Added
 
