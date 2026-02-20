@@ -1,5 +1,6 @@
 import os
 from abc import ABC, abstractmethod
+from typing import NoReturn
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,7 @@ class BaseSource(ABC):
     @staticmethod
     def _handle_request_error(
         exc: requests.RequestException, url: str, source_name: str
-    ) -> None:
+    ) -> NoReturn:
         if isinstance(exc, requests.HTTPError):
             status_code = exc.response.status_code if exc.response is not None else "?"
             detail = exc.response.text if exc.response is not None else str(exc)
@@ -146,7 +147,7 @@ class GitHubIssuesSource(BaseSource):
         total_count: int | None = None
         page = 1
         while True:
-            search_query = f"is:issue {self.query}".strip()
+            search_query = f"is:issue {self.query}"
             params = urlencode(
                 {"q": search_query, "per_page": GITHUB_PAGE_SIZE, "page": page}
             )
