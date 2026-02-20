@@ -1,0 +1,13 @@
+[project]
+name = "ai-launchpad"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = []
+
+[tool.pytest.ini_options]
+addopts = "-v --cov=. --cov-report term-missing --cov-fail-under 90"
+python_files = "tests/test_*.py"
+
