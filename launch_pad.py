@@ -1,4 +1,3 @@
-import re
 import shlex
 import subprocess
 import time
@@ -9,6 +8,7 @@ from agents import AGENTS
 from config import read_config
 from data_models import WorkItem
 from sources import BaseSource, SOURCE_TYPES
+from utils import slugify
 
 
 def _confirm_work_items(work_items: list[WorkItem]) -> list[WorkItem]:
@@ -30,7 +30,9 @@ def _get_work_items(sources: list[BaseSource]) -> list[WorkItem]:
     for source in sources:
         work_items.extend(source.get_work_items())
 
-    return work_items
+    confirmed_work_items = _confirm_work_items(work_items)
+
+    return confirmed_work_items
 
 
 def _create_home_base(work_item_sluggified_title: str) -> Path:
@@ -92,7 +94,7 @@ def _write_cleanup_script(home_base: Path, work_item: WorkItem) -> None:
 
     tmux_sessions = []
     for agent in AGENTS:
-        safe_agent = re.sub(r"[^a-z0-9]+", "-", agent.cmd.lower()).strip("-") or "agent"
+        safe_agent = slugify(agent.cmd) or "agent"
         tmux_sessions.append(f"{home_base.name}-{safe_agent}")
 
     source_repos = []
@@ -119,7 +121,7 @@ def _write_cleanup_script(home_base: Path, work_item: WorkItem) -> None:
 
 
 def _create_context(work_item: WorkItem) -> Path:
-    sluggified_title = re.sub(r"[^a-z0-9]+", "-", work_item["title"].lower()).strip("-")
+    sluggified_title = slugify(work_item["title"])
     home_base = _create_home_base(sluggified_title)
     _copy_relevant_sources(work_item, home_base)
     _write_cleanup_script(home_base, work_item)
@@ -132,7 +134,7 @@ def _start_agent_in_context(
     agent_args = shlex.split(agent_cmd)
     if not agent_args:
         raise ValueError("Agent command is empty.")
-    safe_agent = re.sub(r"[^a-z0-9]+", "-", agent_cmd.lower()).strip("-") or "agent"
+    safe_agent = slugify(agent_cmd) or "agent"
     session_name = f"{context_path.name}-{safe_agent}"
 
     prompt_path = context_path / f"agent_prompt_{safe_agent}.txt"
