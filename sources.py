@@ -1,3 +1,4 @@
+import os
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,9 @@ class GitHubIssuesSource(BaseSource):
                 "X-GitHub-Api-Version": "2022-11-28",
             }
         )
+        github_access_token = os.environ.get(GITHUB_ACCESS_TOKEN, "").strip()
+        if github_access_token:
+            self._session.headers["Authorization"] = f"Bearer {github_access_token}"
 
     @classmethod
     def add_arguments(cls, parser: ArgumentParser) -> None:
@@ -117,9 +121,7 @@ class GitHubIssuesSource(BaseSource):
                 f"GitHub API request failed ({status_code}) for {url}: {detail}"
             ) from exc
         except requests.RequestException as exc:
-            raise RuntimeError(
-                f"GitHub API request failed for {url}: {exc}"
-            ) from exc
+            raise RuntimeError(f"GitHub API request failed for {url}: {exc}") from exc
 
     def _fetch_issues_from_search(self) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []
