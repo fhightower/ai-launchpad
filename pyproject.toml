@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = ["requests>=2.31.0"]
 
 [dependency-groups]
-dev = []
+dev = ["pytest>=8.0", "pytest-cov>=6.0"]
 
 [tool.pytest.ini_options]
 addopts = "-v --cov=. --cov-report term-missing --cov-fail-under 90"
