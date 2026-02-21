@@ -205,9 +205,7 @@ class GitHubIssuesSource(BaseSource):
     def _repo_info_from_issue(self, issue: dict[str, Any]) -> tuple[str, str]:
         owner_repo = self._owner_repo_from_api_url(
             str(issue.get("repository_url") or "").strip()
-        ) or self._owner_repo_from_issue_url(
-            str(issue.get("html_url") or "").strip()
-        )
+        ) or self._owner_repo_from_issue_url(str(issue.get("html_url") or "").strip())
         if owner_repo:
             return owner_repo, owner_repo.split("/", maxsplit=1)[1]
         return "", ""
