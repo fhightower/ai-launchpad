@@ -43,8 +43,12 @@ def _create_home_base(work_item_sluggified_title: str) -> Path:
 
 
 def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> None:
-    base_source_dir = read_config()["base_source_dir"]
-    source_path = Path(base_source_dir) / source_dir
+    source_dir_path = Path(source_dir)
+    if source_dir_path.is_absolute():
+        source_path = source_dir_path
+    else:
+        base_source_dir = read_config()["base_source_dir"]
+        source_path = Path(base_source_dir) / source_dir
     destination_path = home_base / source_path.name
 
     if not source_path.is_dir():
@@ -82,7 +86,8 @@ def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> 
 
 def _copy_relevant_sources(work_item: WorkItem, home_base: Path) -> None:
     for source_dir in work_item["relevant_source_directories"]:
-        source_dir = source_dir.lower()
+        if not Path(source_dir).is_absolute():
+            source_dir = source_dir.lower()
         try:
             _copy_relevant_source(source_dir, home_base.name, home_base)
         except (ValueError, subprocess.CalledProcessError) as exc:
@@ -100,7 +105,11 @@ def _write_cleanup_script(home_base: Path, work_item: WorkItem) -> None:
     source_repos = []
     worktree_paths = []
     for source_dir in work_item["relevant_source_directories"]:
-        source_path = Path(base_source_dir) / source_dir.lower()
+        source_dir_path = Path(source_dir)
+        if source_dir_path.is_absolute():
+            source_path = source_dir_path
+        else:
+            source_path = Path(base_source_dir) / source_dir.lower()
         source_repos.append(str(source_path))
         worktree_paths.append(str(home_base / source_path.name))
 

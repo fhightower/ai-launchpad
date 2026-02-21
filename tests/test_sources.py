@@ -59,7 +59,7 @@ class TestLocalTodoFileSource:
         assert items[0]["title"] == "Fix login bug"
         assert items[1]["title"] == "Update docs"
         assert items[0]["description"] == ""
-        assert items[0]["relevant_source_directories"] == []
+        assert items[0]["relevant_source_directories"] == [str(tmp_path)]
 
     def test_empty_file(self, tmp_path):
         todo = tmp_path / "empty.txt"
