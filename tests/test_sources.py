@@ -394,10 +394,20 @@ class TestJiraJqlSource:
     # --- fetch_issues pagination ---
     def test_fetch_issues_single_page(self):
         source = self._make_source()
-        payload = {"issues": [{"key": "X-1"}], "total": 1}
+        payload = {"issues": [{"key": "X-1"}], "isLast": True}
         with patch.object(source, "_get_json", return_value=payload):
             result = source._fetch_issues()
         assert result == [{"key": "X-1"}]
+
+    def test_fetch_issues_multiple_pages(self):
+        source = self._make_source()
+        payloads = [
+            {"issues": [{"key": "X-1"}], "isLast": False},
+            {"issues": [{"key": "X-2"}], "isLast": True},
+        ]
+        with patch.object(source, "_get_json", side_effect=payloads):
+            result = source._fetch_issues()
+        assert result == [{"key": "X-1"}, {"key": "X-2"}]
 
     def test_fetch_issues_invalid_response(self):
         source = self._make_source()
@@ -407,8 +417,15 @@ class TestJiraJqlSource:
 
     def test_fetch_issues_missing_issues_key(self):
         source = self._make_source()
-        with patch.object(source, "_get_json", return_value={"total": 0}):
+        with patch.object(source, "_get_json", return_value={"isLast": True}):
             with pytest.raises(RuntimeError, match="missing issues list"):
+                source._fetch_issues()
+
+    def test_fetch_issues_missing_is_last(self):
+        source = self._make_source()
+        payload = {"issues": [{"key": "X-1"}]}
+        with patch.object(source, "_get_json", return_value=payload):
+            with pytest.raises(RuntimeError, match="isLast"):
                 source._fetch_issues()
 
 

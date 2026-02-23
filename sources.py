@@ -325,13 +325,15 @@ class JiraJqlSource(BaseSource):
                 )
 
             issues.extend(page)
-            if not page:
+            is_last = payload.get("isLast")
+            if not isinstance(is_last, bool):
+                raise RuntimeError(
+                    f"Unexpected Jira search response for JQL '{self.jql}': missing or invalid isLast flag."
+                )
+            if not page or is_last:
                 break
 
             start_at += len(page)
-            total = payload.get("total")
-            if isinstance(total, int) and start_at >= total:
-                break
 
         return issues
 

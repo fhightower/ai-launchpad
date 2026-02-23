@@ -8,13 +8,15 @@ The first time you are setting up this project, you will need to:
 
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 2. Run `uv sync` to create a virtual environment and install all dependencies
+3. Copy `.env.example` to `.env` and fill in any required credentials (e.g. GitHub access token, Jira credentials)
+4. Copy `config-example.toml` to `config.toml` and fill in any required configuration (e.g. Jira org name)
 
 ## Quickstart
 
 Once this project is [setup](#initial-setup), you can get started with:
 
 ```bash
-uv run python launch_pad.py --todo-file ./todo
+uv run python launch_pad.py -h
 ```
 
 ### GitHub Issue Sources
@@ -39,7 +41,7 @@ uv run python launch_pad.py \
 You can load work items from Jira using JQL:
 
 ```bash
-uv run python launch_pad.py --jira-jql "project = CORE AND status = 'Ready for Dev' ORDER BY created DESC"
+uv run python launch_pad.py --jira-jql "project = CORE AND status = 'Backlog' ORDER BY created DESC"
 ```
 
 Required environment/config for Jira:
