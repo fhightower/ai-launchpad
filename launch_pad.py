@@ -94,7 +94,9 @@ def _copy_relevant_sources(work_item: WorkItem, home_base: Path) -> None:
             print(f"Warning: Failed to copy {source_dir}: {exc}")
 
 
-def _write_cleanup_script(home_base: Path, work_item: WorkItem, agent: BaseAgent) -> None:
+def _write_cleanup_script(
+    home_base: Path, work_item: WorkItem, agent: BaseAgent
+) -> None:
     base_source_dir = read_config()["base_source_dir"]
 
     safe_agent = slugify(agent.cmd) or "agent"
@@ -203,7 +205,7 @@ def launch(sources: list[BaseSource], agent: BaseAgent):
         _start_agent_in_context(context_path, agent.cmd, prompt)
 
 
-if __name__ == "__main__":
+def start_launch_sequence(argv: list[str] | None = None) -> None:
     parser = ArgumentParser(
         description="Launch agent workflows from one or more work-item sources."
     )
@@ -217,7 +219,7 @@ if __name__ == "__main__":
         help=f"Agent to use (available: {available_agents}). "
         "Overrides default_agent in config.toml.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     sources: list[BaseSource] = []
     for source_type in SOURCE_TYPES:
@@ -225,3 +227,7 @@ if __name__ == "__main__":
 
     agent = _resolve_agent(args.agent)
     launch(sources, agent)
+
+
+if __name__ == "__main__":
+    start_launch_sequence()

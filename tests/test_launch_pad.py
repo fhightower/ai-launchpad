@@ -12,10 +12,12 @@ from launch_pad import (
     _create_home_base,
     _copy_relevant_source,
     _copy_relevant_sources,
+    _write_cleanup_script,
     _start_agent_in_context,
     _create_context,
     _resolve_agent,
     launch,
+    start_launch_sequence,
 )
 
 
@@ -120,6 +122,79 @@ class TestCopyRelevantSources:
 
 
 # ---------------------------------------------------------------------------
+# _write_cleanup_script
+# ---------------------------------------------------------------------------
+class TestWriteCleanupScript:
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    def test_creates_cleanup_script(self, _mock_config, tmp_path):
+        home_base = tmp_path / "my-task"
+        home_base.mkdir()
+        item = _make_work_item(relevant_source_directories=["repo-a"])
+        agent = ClaudeAgent()
+        _write_cleanup_script(home_base, item, agent)
+        cleanup = home_base / "cleanup.sh"
+        assert cleanup.exists()
+        content = cleanup.read_text()
+        assert "my-task" in content
+        assert "my-task-claude" in content
+        assert "/src/repo-a" in content
+
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    def test_cleanup_script_is_executable(self, _mock_config, tmp_path):
+        home_base = tmp_path / "task"
+        home_base.mkdir()
+        item = _make_work_item()
+        agent = ClaudeAgent()
+        _write_cleanup_script(home_base, item, agent)
+        cleanup = home_base / "cleanup.sh"
+        assert cleanup.stat().st_mode & 0o755
+
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    def test_absolute_source_dir(self, _mock_config, tmp_path):
+        home_base = tmp_path / "task"
+        home_base.mkdir()
+        item = _make_work_item(relevant_source_directories=["/absolute/repo"])
+        agent = ClaudeAgent()
+        _write_cleanup_script(home_base, item, agent)
+        content = (home_base / "cleanup.sh").read_text()
+        assert "/absolute/repo" in content
+
+
+# ---------------------------------------------------------------------------
+# _copy_relevant_source
+# ---------------------------------------------------------------------------
+class TestCopyRelevantSourceSubprocess:
+    @patch("launch_pad.subprocess.run")
+    @patch("launch_pad.read_config", return_value={"base_source_dir": ""})
+    def test_calls_git_worktree_new_branch(self, _mock_config, mock_run, tmp_path):
+        source = tmp_path / "repo"
+        source.mkdir()
+        dest = tmp_path / "dest"
+        dest.mkdir()
+        # Simulate branch not existing (returncode=1)
+        mock_run.return_value = MagicMock(returncode=1)
+        _copy_relevant_source(str(source), "new-branch", dest)
+        # First call: git show-ref, second call: git worktree add -b
+        worktree_call = mock_run.call_args_list[1]
+        assert "worktree" in worktree_call.args[0]
+        assert "-b" in worktree_call.args[0]
+
+    @patch("launch_pad.subprocess.run")
+    @patch("launch_pad.read_config", return_value={"base_source_dir": ""})
+    def test_calls_git_worktree_existing_branch(self, _mock_config, mock_run, tmp_path):
+        source = tmp_path / "repo"
+        source.mkdir()
+        dest = tmp_path / "dest"
+        dest.mkdir()
+        # Simulate branch exists (returncode=0)
+        mock_run.return_value = MagicMock(returncode=0)
+        _copy_relevant_source(str(source), "existing-branch", dest)
+        worktree_call = mock_run.call_args_list[1]
+        assert "worktree" in worktree_call.args[0]
+        assert "-b" not in worktree_call.args[0]
+
+
+# ---------------------------------------------------------------------------
 # _start_agent_in_context
 # ---------------------------------------------------------------------------
 class TestStartAgentInContext:
@@ -197,3 +272,39 @@ class TestLaunch:
         launch([], agent)
         mock_ctx.assert_called_once_with(item, agent)
         assert mock_start.called
+
+
+# ---------------------------------------------------------------------------
+# start_launch_sequence
+# ---------------------------------------------------------------------------
+class TestStartLaunchSequence:
+    @patch("launch_pad.launch")
+    @patch("launch_pad._resolve_agent")
+    def test_parses_agent_arg(self, mock_resolve, mock_launch):
+        agent = ClaudeAgent()
+        mock_resolve.return_value = agent
+        start_launch_sequence(["--agent", "claude"])
+        mock_resolve.assert_called_once_with("claude")
+        mock_launch.assert_called_once_with([], agent)
+
+    @patch("launch_pad.launch")
+    @patch("launch_pad._resolve_agent")
+    def test_default_agent_is_none(self, mock_resolve, mock_launch):
+        agent = ClaudeAgent()
+        mock_resolve.return_value = agent
+        start_launch_sequence([])
+        mock_resolve.assert_called_once_with(None)
+
+    @patch("launch_pad.launch")
+    @patch("launch_pad._resolve_agent")
+    def test_passes_sources_from_args(self, mock_resolve, mock_launch, tmp_path):
+        todo = tmp_path / "todo.txt"
+        todo.write_text("- Task one\n")
+        agent = ClaudeAgent()
+        mock_resolve.return_value = agent
+        start_launch_sequence(["--todo-file", str(todo), "--agent", "claude"])
+        mock_resolve.assert_called_once_with("claude")
+        _, kwargs = mock_launch.call_args
+        # sources are positional
+        sources = mock_launch.call_args.args[0]
+        assert len(sources) == 1
