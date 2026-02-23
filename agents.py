@@ -26,8 +26,13 @@ class ClaudeAgent(BaseAgent):
     name = "claude"
 
 
+class CodexAgent(BaseAgent):
+    name = "codex"
+
+
 AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
     "claude": ClaudeAgent,
+    "codex": CodexAgent,
 }
 
 
