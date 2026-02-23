@@ -80,7 +80,7 @@ class LocalTodoFileSource(BaseSource):
                             title=title,
                             description="",
                             link="",
-                            relevant_source_directories=[],
+                            relevant_source_directories=[str(self.file_path.resolve().parent)],
                         )
                     )
         return work_items

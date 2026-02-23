@@ -26,4 +26,21 @@ class ClaudeAgent(BaseAgent):
     name = "claude"
 
 
-AGENTS: list[BaseAgent] = [ClaudeAgent()]
+class CodexAgent(BaseAgent):
+    name = "codex"
+
+
+AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
+    "claude": ClaudeAgent,
+    "codex": CodexAgent,
+}
+
+
+def get_agent(name: str) -> BaseAgent:
+    agent_class = AGENT_REGISTRY.get(name)
+    if agent_class is None:
+        available = ", ".join(sorted(AGENT_REGISTRY))
+        raise ValueError(
+            f"Unknown agent {name!r}. Available agents: {available}"
+        )
+    return agent_class()

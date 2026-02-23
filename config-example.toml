@@ -1,6 +1,7 @@
 base_contexts_dir = ""
 base_source_dir = ""
 custom_agent_message = ""
+default_agent = "claude"
 
 [jira]
 org_name = ""
