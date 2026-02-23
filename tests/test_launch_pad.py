@@ -159,10 +159,13 @@ class TestCreateContext:
 # launch
 # ---------------------------------------------------------------------------
 class TestLaunch:
+    @patch("agents.read_config", return_value={})
     @patch("launch_pad._start_agent_in_context")
     @patch("launch_pad._create_context")
     @patch("launch_pad._get_work_items")
-    def test_launch_processes_items(self, mock_get, mock_ctx, mock_start, tmp_path):
+    def test_launch_processes_items(
+        self, mock_get, mock_ctx, mock_start, _mock_read_config, tmp_path
+    ):
         item = _make_work_item()
         mock_get.return_value = [item]
         mock_ctx.return_value = tmp_path
