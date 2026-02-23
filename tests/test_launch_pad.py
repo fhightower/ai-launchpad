@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock, call
 
 import pytest
 
+from agents import ClaudeAgent
 from data_models import WorkItem
 from launch_pad import (
     _confirm_work_items,
@@ -13,6 +14,7 @@ from launch_pad import (
     _copy_relevant_sources,
     _start_agent_in_context,
     _create_context,
+    _resolve_agent,
     launch,
 )
 
@@ -138,6 +140,30 @@ class TestStartAgentInContext:
 
 
 # ---------------------------------------------------------------------------
+# _resolve_agent
+# ---------------------------------------------------------------------------
+class TestResolveAgent:
+    @patch("launch_pad.read_config", return_value={})
+    def test_cli_agent_takes_precedence(self, _mock_config):
+        agent = _resolve_agent("claude")
+        assert isinstance(agent, ClaudeAgent)
+
+    @patch("launch_pad.read_config", return_value={"default_agent": "claude"})
+    def test_config_agent_used_when_no_cli(self, _mock_config):
+        agent = _resolve_agent(None)
+        assert isinstance(agent, ClaudeAgent)
+
+    @patch("launch_pad.read_config", return_value={})
+    def test_raises_when_no_agent_specified(self, _mock_config):
+        with pytest.raises(ValueError, match="No agent specified"):
+            _resolve_agent(None)
+
+    def test_unknown_agent_raises(self):
+        with pytest.raises(ValueError, match="Unknown agent"):
+            _resolve_agent("nonexistent")
+
+
+# ---------------------------------------------------------------------------
 # _create_context
 # ---------------------------------------------------------------------------
 class TestCreateContext:
@@ -148,10 +174,11 @@ class TestCreateContext:
         mock_home.return_value = tmp_path / "ctx"
         (tmp_path / "ctx").mkdir()
         item = _make_work_item()
-        result = _create_context(item)
+        agent = ClaudeAgent()
+        result = _create_context(item, agent)
         mock_home.assert_called_once()
         mock_copy.assert_called_once_with(item, tmp_path / "ctx")
-        mock_cleanup.assert_called_once()
+        mock_cleanup.assert_called_once_with(tmp_path / "ctx", item, agent)
         assert result == tmp_path / "ctx"
 
 
@@ -166,6 +193,7 @@ class TestLaunch:
         item = _make_work_item()
         mock_get.return_value = [item]
         mock_ctx.return_value = tmp_path
-        launch([])
-        mock_ctx.assert_called_once_with(item)
+        agent = ClaudeAgent()
+        launch([], agent)
+        mock_ctx.assert_called_once_with(item, agent)
         assert mock_start.called

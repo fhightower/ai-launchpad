@@ -4,7 +4,7 @@ import time
 from argparse import ArgumentParser
 from pathlib import Path
 
-from agents import AGENTS
+from agents import BaseAgent, get_agent, AGENT_REGISTRY
 from config import read_config
 from data_models import WorkItem
 from sources import BaseSource, SOURCE_TYPES
@@ -94,13 +94,11 @@ def _copy_relevant_sources(work_item: WorkItem, home_base: Path) -> None:
             print(f"Warning: Failed to copy {source_dir}: {exc}")
 
 
-def _write_cleanup_script(home_base: Path, work_item: WorkItem) -> None:
+def _write_cleanup_script(home_base: Path, work_item: WorkItem, agent: BaseAgent) -> None:
     base_source_dir = read_config()["base_source_dir"]
 
-    tmux_sessions = []
-    for agent in AGENTS:
-        safe_agent = slugify(agent.cmd) or "agent"
-        tmux_sessions.append(f"{home_base.name}-{safe_agent}")
+    safe_agent = slugify(agent.cmd) or "agent"
+    tmux_sessions = [f"{home_base.name}-{safe_agent}"]
 
     source_repos = []
     worktree_paths = []
@@ -129,11 +127,11 @@ def _write_cleanup_script(home_base: Path, work_item: WorkItem) -> None:
     cleanup_path.chmod(0o755)
 
 
-def _create_context(work_item: WorkItem) -> Path:
+def _create_context(work_item: WorkItem, agent: BaseAgent) -> Path:
     sluggified_title = slugify(work_item["title"])
     home_base = _create_home_base(sluggified_title)
     _copy_relevant_sources(work_item, home_base)
-    _write_cleanup_script(home_base, work_item)
+    _write_cleanup_script(home_base, work_item, agent)
     return home_base
 
 
@@ -164,7 +162,7 @@ def _start_agent_in_context(
     )
     target = f"{session_name}:0.0"
     # Wait for some time to let the agent start and wait for confirmation
-    time.sleep(3)
+    time.sleep(5)
     # Affirm the agent has access to the dir
     subprocess.run(
         ["tmux", "send-keys", "-t", target, "C-m"],
@@ -185,12 +183,24 @@ def _start_agent_in_context(
     )
 
 
-def launch(sources: list[BaseSource]):
+def _resolve_agent(agent_name: str | None) -> BaseAgent:
+    if agent_name:
+        return get_agent(agent_name)
+    config_agent = read_config().get("default_agent")
+    if config_agent:
+        return get_agent(config_agent)
+    available = ", ".join(sorted(AGENT_REGISTRY))
+    raise ValueError(
+        f"No agent specified. Use --agent or set default_agent in config.toml. "
+        f"Available agents: {available}"
+    )
+
+
+def launch(sources: list[BaseSource], agent: BaseAgent):
     for work_item in _get_work_items(sources):
-        context_path = _create_context(work_item)
-        for agent in AGENTS:
-            prompt = agent.generate_prompt(work_item)
-            _start_agent_in_context(context_path, agent.cmd, prompt)
+        context_path = _create_context(work_item, agent)
+        prompt = agent.generate_prompt(work_item)
+        _start_agent_in_context(context_path, agent.cmd, prompt)
 
 
 if __name__ == "__main__":
@@ -199,10 +209,19 @@ if __name__ == "__main__":
     )
     for source_type in SOURCE_TYPES:
         source_type.add_arguments(parser)
+    available_agents = ", ".join(sorted(AGENT_REGISTRY))
+    parser.add_argument(
+        "--agent",
+        default=None,
+        metavar="NAME",
+        help=f"Agent to use (available: {available_agents}). "
+        "Overrides default_agent in config.toml.",
+    )
     args = parser.parse_args()
 
     sources: list[BaseSource] = []
     for source_type in SOURCE_TYPES:
         sources.extend(source_type.from_args(args))
 
-    launch(sources)
+    agent = _resolve_agent(args.agent)
+    launch(sources, agent)

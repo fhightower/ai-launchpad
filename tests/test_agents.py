@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 
 from data_models import WorkItem
-from agents import BaseAgent, ClaudeAgent, AGENTS
+from agents import BaseAgent, ClaudeAgent, AGENT_REGISTRY, get_agent
 
 
 def _make_work_item(**overrides) -> WorkItem:
@@ -56,7 +56,24 @@ class TestClaudeAgent:
         assert agent.cmd == "claude"
 
 
-class TestAgentsRegistry:
-    def test_agents_contains_claude(self):
-        assert len(AGENTS) == 1
-        assert isinstance(AGENTS[0], ClaudeAgent)
+class TestAgentRegistry:
+    def test_registry_contains_claude(self):
+        assert "claude" in AGENT_REGISTRY
+        assert AGENT_REGISTRY["claude"] is ClaudeAgent
+
+    def test_registry_is_not_empty(self):
+        assert len(AGENT_REGISTRY) > 0
+
+
+class TestGetAgent:
+    def test_returns_claude_agent(self):
+        agent = get_agent("claude")
+        assert isinstance(agent, ClaudeAgent)
+
+    def test_unknown_agent_raises(self):
+        with pytest.raises(ValueError, match="Unknown agent 'nonexistent'"):
+            get_agent("nonexistent")
+
+    def test_error_lists_available_agents(self):
+        with pytest.raises(ValueError, match="claude"):
+            get_agent("nonexistent")
