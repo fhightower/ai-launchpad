@@ -1,4 +1,5 @@
 # AI Launchpad
+[![Tests](https://github.com/fhightower/ai-launchpad/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/fhightower/ai-launchpad/actions/workflows/test.yml)
 
 A light-weight framework for making simultaneous agentic updates to a multiple repositories.
 
@@ -8,8 +9,7 @@ The first time you are setting up this project, you will need to:
 
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 2. Run `uv sync` to create a virtual environment and install all dependencies
-3. Copy `.env.example` to `.env` and fill in any required credentials (e.g. GitHub access token, Jira credentials)
-4. Copy `config-example.toml` to `config.toml` and fill in any required configuration (e.g. Jira org name)
+3. Copy `config-example.toml` to `config.toml` and fill in your configuration and credentials
 
 ## Quickstart
 
@@ -23,7 +23,7 @@ uv run python launch_pad.py -h
 
 You can load work items directly from GitHub issues:
 
-Set `GITHUB_ACCESS_TOKEN` in your environment if queries need private-repo access.
+Set `github.access_token` in `config.toml` if queries need private-repo access.
 
 ```bash
 # Pull issues using a GitHub issue query for one repo
@@ -44,11 +44,8 @@ You can load work items from Jira using JQL:
 uv run python launch_pad.py --jira-jql "project = CORE AND status = 'Backlog' ORDER BY created DESC"
 ```
 
-Required environment/config for Jira:
+Required config for Jira (set in `config.toml`):
 
-- Set `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment.
-- Set `jira.org_name` in `config.toml` (or set `JIRA_ORG_NAME` in the environment).
-
-## Principles
-
-- Credentials are in `.env` (loaded with [direnv](https://direnv.net/))
+- `jira.org_name`
+- `jira.email`
+- `jira.api_token`

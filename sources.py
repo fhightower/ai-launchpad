@@ -1,4 +1,3 @@
-import os
 from abc import ABC, abstractmethod
 from typing import NoReturn
 from argparse import ArgumentParser, Namespace
@@ -15,13 +14,8 @@ from data_models import WorkItem
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100
 REQUEST_TIMEOUT_SECONDS = 20
-GITHUB_ACCESS_TOKEN_ENV_VAR = "GITHUB_ACCESS_TOKEN"
-
 JIRA_SEARCH_ENDPOINT = "/rest/api/3/search/jql"
 JIRA_PAGE_SIZE = 100
-JIRA_EMAIL_ENV_VAR = "JIRA_EMAIL"
-JIRA_API_TOKEN_ENV_VAR = "JIRA_API_TOKEN"
-JIRA_ORG_NAME_ENV_VAR = "JIRA_ORG_NAME"
 
 
 class BaseSource(ABC):
@@ -99,7 +93,9 @@ class GitHubIssuesSource(BaseSource):
                 "X-GitHub-Api-Version": "2022-11-28",
             }
         )
-        github_access_token = os.environ.get(GITHUB_ACCESS_TOKEN_ENV_VAR, "").strip()
+        github_access_token = str(
+            read_config().get("github", {}).get("access_token", "")
+        ).strip()
         if github_access_token:
             self._session.headers["Authorization"] = f"Bearer {github_access_token}"
 
@@ -241,20 +237,15 @@ class JiraJqlSource(BaseSource):
             raise ValueError("Jira JQL cannot be empty.")
 
         jira_section = read_config().get("jira", {})
-        configured_org_name = str(jira_section.get("org_name") or "").strip()
-        org_name = (
-            os.environ.get(JIRA_ORG_NAME_ENV_VAR, "").strip() or configured_org_name
-        )
+        org_name = str(jira_section.get("org_name") or "").strip()
         if not org_name:
-            raise ValueError(
-                f"Set jira.org_name in config.toml or {JIRA_ORG_NAME_ENV_VAR} in the environment."
-            )
+            raise ValueError("Set jira.org_name in config.toml.")
 
-        email = os.environ.get(JIRA_EMAIL_ENV_VAR, "").strip()
-        api_token = os.environ.get(JIRA_API_TOKEN_ENV_VAR, "").strip()
+        email = str(jira_section.get("email") or "").strip()
+        api_token = str(jira_section.get("api_token") or "").strip()
         if not email or not api_token:
             raise ValueError(
-                f"{JIRA_EMAIL_ENV_VAR} and {JIRA_API_TOKEN_ENV_VAR} environment variables must be set."
+                "Set jira.email and jira.api_token in config.toml."
             )
 
         self.base_url = f"https://{org_name}.atlassian.net"

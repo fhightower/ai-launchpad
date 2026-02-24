@@ -1,7 +1,12 @@
 base_contexts_dir = ""
 base_source_dir = ""
 custom_agent_message = ""
-default_agent = "claude"
+default_agent = "codex"
+
+[github]
+access_token = ""
 
 [jira]
 org_name = ""
+email = ""
+api_token = ""
