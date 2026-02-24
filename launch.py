@@ -177,7 +177,7 @@ def _resolve_agent(agent_name: str | None) -> BaseAgent:
     )
 
 
-def launch(sources: list[BaseSource], agent: BaseAgent):
+def lift_off(sources: list[BaseSource], agent: BaseAgent):
     for work_item in _get_work_items(sources):
         context_path = _create_context(work_item, agent)
         prompt = agent.generate_prompt(work_item)
@@ -205,7 +205,7 @@ def start_launch_sequence(argv: list[str] | None = None) -> None:
         sources.extend(source_type.from_args(args))
 
     agent = _resolve_agent(args.agent)
-    launch(sources, agent)
+    lift_off(sources, agent)
 
 
 if __name__ == "__main__":

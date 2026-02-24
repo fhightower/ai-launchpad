@@ -16,7 +16,7 @@ The first time you are setting up this project, you will need to:
 Once this project is [setup](#initial-setup), you can get started with:
 
 ```bash
-uv run python launch_pad.py -h
+uv run python launch.py -h
 ```
 
 ### GitHub Issue Sources
@@ -27,10 +27,10 @@ Set `github.access_token` in `config.toml` if queries need private-repo access.
 
 ```bash
 # Pull issues using a GitHub issue query for one repo
-uv run python launch_pad.py --github-issue-query "repo:owner/repo is:open label:bug sort:updated-desc"
+uv run python launch.py --github-issue-query "repo:owner/repo is:open label:bug sort:updated-desc"
 
 # Mix and match multiple sources
-uv run python launch_pad.py \
+uv run python launch.py \
   --todo-file ./todo \
   --github-issue-query "repo:owner/repo-a is:open assignee:@me" \
   --github-issue-query "org:owner is:open label:bug"
@@ -41,7 +41,7 @@ uv run python launch_pad.py \
 You can load work items from Jira using JQL:
 
 ```bash
-uv run python launch_pad.py --jira-jql "project = CORE AND status = 'Backlog' ORDER BY created DESC"
+uv run python launch.py --jira-jql "project = CORE AND status = 'Backlog' ORDER BY created DESC"
 ```
 
 Required config for Jira (set in `config.toml`):
