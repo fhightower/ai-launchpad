@@ -6,6 +6,7 @@ HOME_BASE="__HOME_BASE__"
 TMUX_SESSIONS=(__TMUX_SESSIONS__)
 SOURCE_REPOS=(__SOURCE_REPOS__)
 WORKTREE_PATHS=(__WORKTREE_PATHS__)
+BASE_WORKTREES_DIR="__BASE_WORKTREES_DIR__"
 
 echo "=== Cleanup: $CONTEXT_NAME ==="
 echo ""
@@ -39,7 +40,7 @@ for i in "${!WORKTREE_PATHS[@]}"; do
 done
 
 echo "Removing home base: $HOME_BASE"
-cd /
 rm -rf "$HOME_BASE"
 
+cd "$BASE_WORKTREES_DIR"
 echo "Cleanup complete."

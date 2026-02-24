@@ -35,8 +35,8 @@ def _get_work_items(sources: list[BaseSource]) -> list[WorkItem]:
 
 
 def _create_home_base(work_item_sluggified_title: str) -> Path:
-    base_contexts_dir = read_config()["base_contexts_dir"]
-    home_base = Path(base_contexts_dir) / work_item_sluggified_title
+    base_worktrees_dir = read_config()["base_worktrees_dir"]
+    home_base = Path(base_worktrees_dir) / work_item_sluggified_title
     home_base.mkdir(parents=True, exist_ok=True)
     return home_base
 
@@ -96,7 +96,9 @@ def _copy_relevant_sources(work_item: WorkItem, home_base: Path) -> None:
 def _write_cleanup_script(
     home_base: Path, work_item: WorkItem, agent: BaseAgent
 ) -> None:
-    base_source_dir = read_config()["base_source_dir"]
+    config = read_config()
+    base_source_dir = config["base_source_dir"]
+    base_worktrees_dir = config["base_worktrees_dir"]
 
     safe_agent = slugify(agent.cmd) or "agent"
     tmux_sessions = [f"{home_base.name}-{safe_agent}"]
@@ -122,6 +124,7 @@ def _write_cleanup_script(
     script = script.replace("__TMUX_SESSIONS__", bash_array(tmux_sessions))
     script = script.replace("__SOURCE_REPOS__", bash_array(source_repos))
     script = script.replace("__WORKTREE_PATHS__", bash_array(worktree_paths))
+    script = script.replace("__BASE_WORKTREES_DIR__", str(base_worktrees_dir))
 
     cleanup_path = home_base / "cleanup.sh"
     cleanup_path.write_text(script, encoding="utf-8")

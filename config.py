@@ -28,7 +28,7 @@ def read_config() -> dict:
         raise ValueError(f"Config file at {config_path} is empty or invalid.")
 
     if missing_fields := _missing_required_fields(
-        config, ("base_contexts_dir", "base_source_dir")
+        config, ("base_worktrees_dir", "base_source_dir")
     ):
         raise ValueError(
             f"Config file at {config_path} is missing required fields: {', '.join(missing_fields)}",

@@ -14,7 +14,7 @@ from sources import (
 )
 
 BASE_CONFIG = {
-    "base_contexts_dir": "/tmp",
+    "base_worktrees_dir": "/tmp",
     "base_source_dir": "/tmp",
 }
 

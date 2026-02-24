@@ -69,11 +69,11 @@ class TestGetWorkItems:
 # _create_home_base
 # ---------------------------------------------------------------------------
 class TestCreateHomeBase:
-    @patch("launch_pad.read_config", return_value={"base_contexts_dir": ""})
+    @patch("launch_pad.read_config", return_value={"base_worktrees_dir": ""})
     def test_creates_directory(self, _mock_config, tmp_path):
         with patch(
             "launch_pad.read_config",
-            return_value={"base_contexts_dir": str(tmp_path)},
+            return_value={"base_worktrees_dir": str(tmp_path)},
         ):
             home = _create_home_base("my-task")
         assert home.exists()
@@ -81,7 +81,7 @@ class TestCreateHomeBase:
 
     @patch("launch_pad.read_config")
     def test_idempotent(self, mock_config, tmp_path):
-        mock_config.return_value = {"base_contexts_dir": str(tmp_path)}
+        mock_config.return_value = {"base_worktrees_dir": str(tmp_path)}
         _create_home_base("task")
         _create_home_base("task")  # should not raise
 
@@ -125,7 +125,7 @@ class TestCopyRelevantSources:
 # _write_cleanup_script
 # ---------------------------------------------------------------------------
 class TestWriteCleanupScript:
-    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_creates_cleanup_script(self, _mock_config, tmp_path):
         home_base = tmp_path / "my-task"
         home_base.mkdir()
@@ -139,7 +139,7 @@ class TestWriteCleanupScript:
         assert "my-task-claude" in content
         assert "/src/repo-a" in content
 
-    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_cleanup_script_is_executable(self, _mock_config, tmp_path):
         home_base = tmp_path / "task"
         home_base.mkdir()
@@ -149,7 +149,7 @@ class TestWriteCleanupScript:
         cleanup = home_base / "cleanup.sh"
         assert cleanup.stat().st_mode & 0o755
 
-    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src"})
+    @patch("launch_pad.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_absolute_source_dir(self, _mock_config, tmp_path):
         home_base = tmp_path / "task"
         home_base.mkdir()
