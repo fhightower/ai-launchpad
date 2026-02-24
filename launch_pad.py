@@ -1,6 +1,5 @@
 import shlex
 import subprocess
-import time
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -145,9 +144,7 @@ def _start_agent_in_context(
         raise ValueError("Agent command is empty.")
     safe_agent = slugify(agent_cmd) or "agent"
     session_name = f"{context_path.name}-{safe_agent}"
-
-    prompt_path = context_path / f"agent_prompt_{safe_agent}.txt"
-    prompt_path.write_text(agent_prompt, encoding="utf-8")
+    launch_cmd = f"{agent_cmd} {shlex.quote(agent_prompt)}"
 
     subprocess.run(
         [
@@ -158,29 +155,8 @@ def _start_agent_in_context(
             "-d",
             "-c",
             str(context_path),
-            *agent_args,
+            launch_cmd,
         ],
-        check=True,
-    )
-    target = f"{session_name}:0.0"
-    # Wait for some time to let the agent start and wait for confirmation
-    time.sleep(5)
-    # Affirm the agent has access to the dir
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target, "C-m"],
-        check=True,
-    )
-    prompt_instruction = f"Please read and act on the prompt from {prompt_path.name} in the current directory."
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target, "-l", prompt_instruction],
-        check=True,
-    )
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target, "C-m"],
-        check=True,
-    )
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target, "C-m"],
         check=True,
     )
 

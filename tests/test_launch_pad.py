@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -203,15 +203,12 @@ class TestStartAgentInContext:
             _start_agent_in_context(tmp_path, "", "prompt")
 
     @patch("launch_pad.subprocess.run")
-    @patch("launch_pad.time.sleep")
-    def test_writes_prompt_and_starts_tmux(self, _sleep, mock_run, tmp_path):
+    def test_passes_prompt_to_agent_command(self, mock_run, tmp_path):
         _start_agent_in_context(tmp_path, "claude", "my prompt")
-        prompt_file = tmp_path / "agent_prompt_claude.txt"
-        assert prompt_file.read_text() == "my prompt"
-        # First call should be tmux new-session
-        first_call = mock_run.call_args_list[0]
-        assert "tmux" in first_call.args[0]
-        assert "new-session" in first_call.args[0]
+        first_call = mock_run.call_args_list[0].args[0]
+        assert "tmux" in first_call
+        assert "new-session" in first_call
+        assert first_call[-1] == "claude 'my prompt'"
 
 
 # ---------------------------------------------------------------------------
