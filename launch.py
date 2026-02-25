@@ -41,12 +41,35 @@ def _create_home_base(work_item_sluggified_title: str) -> Path:
     return home_base
 
 
+def _get_current_branch(source_path: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(source_path), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _wait_for_expected_source_branch(source_path: Path, expected_branch: str) -> None:
+    while True:
+        current_branch = _get_current_branch(source_path)
+        if current_branch == expected_branch:
+            return
+        print(
+            f"Source repository {source_path} is on branch "
+            f"'{current_branch}', expected '{expected_branch}'."
+        )
+        input("Switch branches and press Enter to continue re-checking: ")
+
+
 def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> None:
+    config = read_config()
     source_dir_path = Path(source_dir)
     if source_dir_path.is_absolute():
         source_path = source_dir_path
     else:
-        base_source_dir = read_config()["base_source_dir"]
+        base_source_dir = config["base_source_dir"]
         source_path = Path(base_source_dir) / source_dir
     destination_path = home_base / source_path.name
 
@@ -56,6 +79,8 @@ def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> 
         )
     if destination_path.exists():
         raise ValueError(f"Destination path {destination_path} already exists.")
+    if expected_branch := config.get("expected_source_repo_branch"):
+        _wait_for_expected_source_branch(source_path, expected_branch)
 
     branch_exists = (
         subprocess.run(

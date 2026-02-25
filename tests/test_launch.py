@@ -193,6 +193,69 @@ class TestCopyRelevantSourceSubprocess:
         assert "worktree" in worktree_call.args[0]
         assert "-b" not in worktree_call.args[0]
 
+    @patch("builtins.input")
+    @patch("launch.subprocess.run")
+    @patch(
+        "launch.read_config",
+        return_value={
+            "base_source_dir": "",
+            "expected_source_repo_branch": "development",
+        },
+    )
+    def test_expected_branch_no_prompt_when_already_on_branch(
+        self, _mock_config, mock_run, mock_input, tmp_path
+    ):
+        source = tmp_path / "repo"
+        source.mkdir()
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        mock_run.side_effect = [
+            MagicMock(stdout="development\n"),
+            MagicMock(returncode=1),
+            MagicMock(returncode=0),
+        ]
+
+        _copy_relevant_source(str(source), "new-branch", dest)
+
+        mock_input.assert_not_called()
+        assert "rev-parse" in mock_run.call_args_list[0].args[0]
+        worktree_call = mock_run.call_args_list[2]
+        assert "worktree" in worktree_call.args[0]
+        assert "-b" in worktree_call.args[0]
+
+    @patch("builtins.input", return_value="")
+    @patch("launch.subprocess.run")
+    @patch(
+        "launch.read_config",
+        return_value={
+            "base_source_dir": "",
+            "expected_source_repo_branch": "development",
+        },
+    )
+    def test_expected_branch_mismatch_prompts_and_rechecks(
+        self, _mock_config, mock_run, mock_input, tmp_path
+    ):
+        source = tmp_path / "repo"
+        source.mkdir()
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        mock_run.side_effect = [
+            MagicMock(stdout="main\n"),
+            MagicMock(stdout="development\n"),
+            MagicMock(returncode=1),
+            MagicMock(returncode=0),
+        ]
+
+        _copy_relevant_source(str(source), "new-branch", dest)
+
+        mock_input.assert_called_once()
+        assert "rev-parse" in mock_run.call_args_list[0].args[0]
+        assert "rev-parse" in mock_run.call_args_list[1].args[0]
+        worktree_call = mock_run.call_args_list[3]
+        assert "worktree" in worktree_call.args[0]
+
 
 # ---------------------------------------------------------------------------
 # _start_agent_in_context

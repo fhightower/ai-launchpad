@@ -11,6 +11,10 @@ The first time you are setting up this project, you will need to:
 2. Run `uv sync` to create a virtual environment and install all dependencies
 3. Copy `config-example.toml` to `config.toml` and fill in your configuration and credentials
 
+Optional config:
+
+- `expected_source_repo_branch` (example: `"dev"`): if set, Launchpad will pause before creating each worktree until the source repo is on this branch.
+
 ## Quickstart
 
 Once this project is [setup](#initial-setup), you can get started with:

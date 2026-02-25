@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional `expected_source_repo_branch` config to pause and re-check source repo branches before creating worktrees.
+
 ## 0.4.0
 
 ### Changed

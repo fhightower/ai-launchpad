@@ -1,5 +1,6 @@
 base_source_dir = ""
 base_worktrees_dir = ""
+expected_source_repo_branch = ""
 custom_agent_message = ""
 default_agent = "codex"
 
