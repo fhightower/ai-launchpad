@@ -1,10 +1,8 @@
-import subprocess
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from agents import ClaudeAgent
+from agents import ClaudeAgent, CodexAgent
 from data_models import WorkItem
 from launch import (
     _confirm_work_items,
@@ -21,15 +19,15 @@ from launch import (
 )
 
 
-def _make_work_item(**overrides) -> WorkItem:
-    defaults = dict(
+def _make_work_item(**overrides: object) -> WorkItem:
+    defaults: dict[str, object] = dict(
         title="Fix bug",
         description="desc",
         link="https://example.com",
         relevant_source_directories=["repo-a"],
     )
     defaults.update(overrides)
-    return WorkItem(**defaults)
+    return WorkItem(**defaults)  # type: ignore[typeddict-item]
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +313,58 @@ class TestCreateContext:
         mock_copy.assert_called_once_with(item, tmp_path / "ctx")
         mock_cleanup.assert_called_once_with(tmp_path / "ctx", item, agent)
         assert result == tmp_path / "ctx"
+
+    @patch("launch._write_cleanup_script")
+    @patch("launch._copy_relevant_sources")
+    @patch("launch._create_home_base")
+    def test_context_name_includes_agent_name__home_base_contains_agent_slug(
+        self, mock_home, mock_copy, mock_cleanup, tmp_path
+    ):
+        mock_home.return_value = tmp_path / "fix-bug-claude"
+        item = _make_work_item(title="Fix bug")
+        agent = ClaudeAgent()
+        _create_context(item, agent)
+        mock_home.assert_called_once_with("fix-bug-claude")
+
+    @patch("launch._write_cleanup_script")
+    @patch("launch._copy_relevant_sources")
+    @patch("launch._create_home_base")
+    def test_context_name_includes_codex_agent__home_base_contains_codex_slug(
+        self, mock_home, mock_copy, mock_cleanup, tmp_path
+    ):
+        mock_home.return_value = tmp_path / "fix-bug-codex"
+        item = _make_work_item(title="Fix bug")
+        agent = CodexAgent()
+        _create_context(item, agent)
+        mock_home.assert_called_once_with("fix-bug-codex")
+
+    @patch("launch._write_cleanup_script")
+    @patch("launch._copy_relevant_sources")
+    @patch("launch._create_home_base")
+    def test_two_agents_same_work_item__different_context_names(
+        self, mock_home, mock_copy, mock_cleanup, tmp_path
+    ):
+        item = _make_work_item(title="Fix bug")
+        mock_home.side_effect = lambda name: tmp_path / name
+
+        path_claude = _create_context(item, ClaudeAgent())
+        path_codex = _create_context(item, CodexAgent())
+
+        assert path_claude.name == "fix-bug-claude"
+        assert path_codex.name == "fix-bug-codex"
+        assert path_claude != path_codex
+
+    @patch("launch._write_cleanup_script")
+    @patch("launch._copy_relevant_sources")
+    @patch("launch._create_home_base")
+    def test_title_with_special_chars__context_name_slugified_with_agent(
+        self, mock_home, mock_copy, mock_cleanup, tmp_path
+    ):
+        mock_home.return_value = tmp_path / "fix-the-login-bug-42-claude"
+        item = _make_work_item(title="Fix the Login Bug #42!")
+        agent = ClaudeAgent()
+        _create_context(item, agent)
+        mock_home.assert_called_once_with("fix-the-login-bug-42-claude")
 
 
 # ---------------------------------------------------------------------------

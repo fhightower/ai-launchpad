@@ -158,7 +158,8 @@ def _write_cleanup_script(
 
 def _create_context(work_item: WorkItem, agent: BaseAgent) -> Path:
     sluggified_title = slugify(work_item["title"])
-    home_base = _create_home_base(sluggified_title)
+    context_name = f"{sluggified_title}-{slugify(agent.name)}"
+    home_base = _create_home_base(context_name)
     _copy_relevant_sources(work_item, home_base)
     _write_cleanup_script(home_base, work_item, agent)
     return home_base
