@@ -125,8 +125,7 @@ def _write_cleanup_script(
     base_source_dir = config["base_source_dir"]
     base_worktrees_dir = config["base_worktrees_dir"]
 
-    safe_agent = slugify(agent.cmd) or "agent"
-    tmux_sessions = [f"{home_base.name}-{safe_agent}"]
+    tmux_sessions = [f"{home_base.name}"]
 
     source_repos = []
     worktree_paths = []
@@ -156,12 +155,32 @@ def _write_cleanup_script(
     cleanup_path.chmod(0o755)
 
 
+def _write_task_file(home_base: Path, work_item: WorkItem) -> None:
+    lines = [
+        f"# {work_item['title']}",
+        "",
+        f"**Link:** {work_item['link']}",
+        "",
+        "## Description",
+        "",
+        work_item["description"],
+        "",
+        "## Relevant source directories",
+        "",
+    ]
+    for source_dir in work_item["relevant_source_directories"]:
+        lines.append(f"- {source_dir}")
+    task_path = home_base / "task.md"
+    task_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _create_context(work_item: WorkItem, agent: BaseAgent) -> Path:
     sluggified_title = slugify(work_item["title"])
     context_name = f"{sluggified_title}-{slugify(agent.name)}"
     home_base = _create_home_base(context_name)
     _copy_relevant_sources(work_item, home_base)
     _write_cleanup_script(home_base, work_item, agent)
+    _write_task_file(home_base, work_item)
     return home_base
 
 
@@ -206,7 +225,7 @@ def _resolve_agent(agent_name: str | None) -> BaseAgent:
 def lift_off(sources: list[BaseSource], agent: BaseAgent):
     for work_item in _get_work_items(sources):
         context_path = _create_context(work_item, agent)
-        prompt = agent.generate_prompt(work_item)
+        prompt = agent.generate_prompt()
         _start_agent_in_context(context_path, agent.cmd, prompt)
 
 

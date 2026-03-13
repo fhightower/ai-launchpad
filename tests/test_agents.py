@@ -1,19 +1,7 @@
 import pytest
 from unittest.mock import patch
 
-from data_models import WorkItem
 from agents import BaseAgent, ClaudeAgent, CodexAgent, AGENT_REGISTRY, get_agent
-
-
-def _make_work_item(**overrides) -> WorkItem:
-    defaults = dict(
-        title="Test item",
-        description="A test work item",
-        link="https://example.com",
-        relevant_source_directories=["repo-a"],
-    )
-    defaults.update(overrides)
-    return WorkItem(**defaults)
 
 
 class TestBaseAgent:
@@ -27,14 +15,10 @@ class TestBaseAgent:
         assert agent.cmd == ""
 
     @patch("agents.read_config", return_value={})
-    def test_generate_prompt_without_custom_message(self, _mock_config):
+    def test_generate_prompt_tells_agent_to_read_task_md(self, _mock_config):
         agent = BaseAgent()
-        item = _make_work_item()
-        prompt = agent.generate_prompt(item)
-        assert "Please solve the work item below" in prompt
-        assert "title: Test item" in prompt
-        assert "description: A test work item" in prompt
-        assert "link: https://example.com" in prompt
+        prompt = agent.generate_prompt()
+        assert "task.md" in prompt
 
     @patch(
         "agents.read_config",
@@ -42,8 +26,35 @@ class TestBaseAgent:
     )
     def test_generate_prompt_with_custom_message(self, _mock_config):
         agent = BaseAgent()
-        prompt = agent.generate_prompt(_make_work_item())
+        prompt = agent.generate_prompt()
         assert "Be thorough!" in prompt
+
+    @patch("agents.read_config", return_value={})
+    def test_generate_prompt_does_not_contain_work_item_fields(self, _mock_config):
+        agent = BaseAgent()
+        prompt = agent.generate_prompt().lower()
+        assert "title:" not in prompt
+        assert "description:" not in prompt
+        assert "link:" not in prompt
+
+    @patch(
+        "agents.read_config",
+        return_value={"custom_agent_message": "Be thorough!"},
+    )
+    def test_generate_prompt_with_custom_message_still_references_task_md(
+        self, _mock_config
+    ):
+        agent = BaseAgent()
+        prompt = agent.generate_prompt()
+        assert "task.md" in prompt
+
+    @patch("agents.read_config", return_value={})
+    def test_generate_prompt_without_custom_message__no_extra_blank_lines(
+        self, _mock_config
+    ):
+        agent = BaseAgent()
+        prompt = agent.generate_prompt()
+        assert "\n\n\n" not in prompt
 
 
 class TestClaudeAgent:

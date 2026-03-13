@@ -11,6 +11,7 @@ from launch import (
     _copy_relevant_source,
     _copy_relevant_sources,
     _write_cleanup_script,
+    _write_task_file,
     _start_agent_in_context,
     _create_context,
     _resolve_agent,
@@ -125,7 +126,7 @@ class TestCopyRelevantSources:
 class TestWriteCleanupScript:
     @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_creates_cleanup_script(self, _mock_config, tmp_path):
-        home_base = tmp_path / "my-task"
+        home_base = tmp_path / "my-task-claude"
         home_base.mkdir()
         item = _make_work_item(relevant_source_directories=["repo-a"])
         agent = ClaudeAgent()
@@ -133,7 +134,6 @@ class TestWriteCleanupScript:
         cleanup = home_base / "cleanup.sh"
         assert cleanup.exists()
         content = cleanup.read_text()
-        assert "my-task" in content
         assert "my-task-claude" in content
         assert "/src/repo-a" in content
 
@@ -156,6 +156,72 @@ class TestWriteCleanupScript:
         _write_cleanup_script(home_base, item, agent)
         content = (home_base / "cleanup.sh").read_text()
         assert "/absolute/repo" in content
+
+
+# ---------------------------------------------------------------------------
+# _write_task_file
+# ---------------------------------------------------------------------------
+class TestWriteTaskFile:
+    def test_creates_task_md(self, tmp_path):
+        item = _make_work_item(title="Fix bug", description="desc", link="https://example.com")
+        _write_task_file(tmp_path, item)
+        task_file = tmp_path / "task.md"
+        assert task_file.exists()
+        content = task_file.read_text()
+        assert "# Fix bug" in content
+        assert "https://example.com" in content
+        assert "desc" in content
+        assert "repo-a" in content
+
+    def test_lists_all_source_directories(self, tmp_path):
+        item = _make_work_item(relevant_source_directories=["repo-a", "repo-b"])
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        assert "- repo-a" in content
+        assert "- repo-b" in content
+
+    def test_markdown_structure__sections_appear_in_order(self, tmp_path):
+        item = _make_work_item(
+            title="My Title",
+            link="https://link.example.com",
+            description="Some description",
+            relevant_source_directories=["src"],
+        )
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        title_pos = content.index("# My Title")
+        link_pos = content.index("**Link:**")
+        desc_heading_pos = content.index("## Description")
+        sources_heading_pos = content.index("## Relevant source directories")
+        assert title_pos < link_pos < desc_heading_pos < sources_heading_pos
+
+    def test_file_ends_with_newline(self, tmp_path):
+        item = _make_work_item()
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        assert content.endswith("\n")
+
+    def test_multiline_description__preserved_in_output(self, tmp_path):
+        multiline = "First line\nSecond line\nThird line"
+        item = _make_work_item(description=multiline)
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        assert "First line\nSecond line\nThird line" in content
+
+    def test_empty_source_directories__heading_present_no_bullets(self, tmp_path):
+        item = _make_work_item(relevant_source_directories=[])
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        assert "## Relevant source directories" in content
+        sources_section = content.split("## Relevant source directories")[1]
+        assert "- " not in sources_section
+
+    def test_special_characters_in_title__written_verbatim(self, tmp_path):
+        title = "Fix #42: refactor [core] module *urgently*"
+        item = _make_work_item(title=title)
+        _write_task_file(tmp_path, item)
+        content = (tmp_path / "task.md").read_text()
+        assert f"# {title}" in content
 
 
 # ---------------------------------------------------------------------------
@@ -300,10 +366,11 @@ class TestResolveAgent:
 # _create_context
 # ---------------------------------------------------------------------------
 class TestCreateContext:
+    @patch("launch._write_task_file")
     @patch("launch._write_cleanup_script")
     @patch("launch._copy_relevant_sources")
     @patch("launch._create_home_base")
-    def test_orchestration(self, mock_home, mock_copy, mock_cleanup, tmp_path):
+    def test_orchestration(self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path):
         mock_home.return_value = tmp_path / "ctx"
         (tmp_path / "ctx").mkdir()
         item = _make_work_item()
@@ -312,13 +379,15 @@ class TestCreateContext:
         mock_home.assert_called_once()
         mock_copy.assert_called_once_with(item, tmp_path / "ctx")
         mock_cleanup.assert_called_once_with(tmp_path / "ctx", item, agent)
+        mock_task.assert_called_once_with(tmp_path / "ctx", item)
         assert result == tmp_path / "ctx"
 
+    @patch("launch._write_task_file")
     @patch("launch._write_cleanup_script")
     @patch("launch._copy_relevant_sources")
     @patch("launch._create_home_base")
     def test_context_name_includes_agent_name__home_base_contains_agent_slug(
-        self, mock_home, mock_copy, mock_cleanup, tmp_path
+        self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
         mock_home.return_value = tmp_path / "fix-bug-claude"
         item = _make_work_item(title="Fix bug")
@@ -326,11 +395,12 @@ class TestCreateContext:
         _create_context(item, agent)
         mock_home.assert_called_once_with("fix-bug-claude")
 
+    @patch("launch._write_task_file")
     @patch("launch._write_cleanup_script")
     @patch("launch._copy_relevant_sources")
     @patch("launch._create_home_base")
     def test_context_name_includes_codex_agent__home_base_contains_codex_slug(
-        self, mock_home, mock_copy, mock_cleanup, tmp_path
+        self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
         mock_home.return_value = tmp_path / "fix-bug-codex"
         item = _make_work_item(title="Fix bug")
@@ -338,11 +408,12 @@ class TestCreateContext:
         _create_context(item, agent)
         mock_home.assert_called_once_with("fix-bug-codex")
 
+    @patch("launch._write_task_file")
     @patch("launch._write_cleanup_script")
     @patch("launch._copy_relevant_sources")
     @patch("launch._create_home_base")
     def test_two_agents_same_work_item__different_context_names(
-        self, mock_home, mock_copy, mock_cleanup, tmp_path
+        self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
         item = _make_work_item(title="Fix bug")
         mock_home.side_effect = lambda name: tmp_path / name
@@ -354,11 +425,12 @@ class TestCreateContext:
         assert path_codex.name == "fix-bug-codex"
         assert path_claude != path_codex
 
+    @patch("launch._write_task_file")
     @patch("launch._write_cleanup_script")
     @patch("launch._copy_relevant_sources")
     @patch("launch._create_home_base")
     def test_title_with_special_chars__context_name_slugified_with_agent(
-        self, mock_home, mock_copy, mock_cleanup, tmp_path
+        self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
         mock_home.return_value = tmp_path / "fix-the-login-bug-42-claude"
         item = _make_work_item(title="Fix the Login Bug #42!")
@@ -384,7 +456,10 @@ class TestLaunch:
         agent = ClaudeAgent()
         lift_off([], agent)
         mock_ctx.assert_called_once_with(item, agent)
-        assert mock_start.called
+        mock_start.assert_called_once()
+        _, kwargs = mock_start.call_args
+        prompt = mock_start.call_args.args[2]
+        assert "task.md" in prompt
 
 
 # ---------------------------------------------------------------------------
