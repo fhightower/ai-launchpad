@@ -66,6 +66,11 @@ class TestClaudeAgent:
         agent = ClaudeAgent()
         assert agent.cmd == "claude"
 
+    def test_build_launch_cmd_includes_name_flag(self):
+        agent = ClaudeAgent()
+        cmd = agent.build_launch_cmd("my-session", "do stuff")
+        assert cmd == "claude -n my-session 'do stuff'"
+
 
 class TestCodexAgent:
     def test_name(self):
@@ -75,6 +80,11 @@ class TestCodexAgent:
     def test_cmd(self):
         agent = CodexAgent()
         assert agent.cmd == "codex"
+
+    def test_build_launch_cmd_no_name_flag(self):
+        agent = CodexAgent()
+        cmd = agent.build_launch_cmd("my-session", "do stuff")
+        assert cmd == "codex 'do stuff'"
 
 
 class TestAgentRegistry:

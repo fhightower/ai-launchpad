@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0
+
+### Added
+
+- Optional `tmux_start_dir` config to start all tmux sessions in a configurable directory (defaults to context path).
+- Claude agent sessions are now named via `--name` flag, making them easier to resume with `claude --resume`.
+- Automatically send Enter to new tmux sessions to accept the agent's initial directory trust prompt.
+
+### Changed
+
+- Simplified tmux session naming to use context path name directly, removing redundant agent suffix.
+- Branch mismatch prompt now allows continuing on the current branch instead of looping until switched.
+
 ## 0.5.0
 
 ### Added

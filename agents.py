@@ -8,6 +8,11 @@ class BaseAgent:
     def cmd(self) -> str:
         return self.name.lower()
 
+    def build_launch_cmd(self, session_name: str, prompt: str) -> str:
+        import shlex
+
+        return f"{self.cmd} {shlex.quote(prompt)}"
+
     def generate_prompt(self) -> str:
         lines = [
             "Read task.md for your work item. Feel free to ask me any questions!",
@@ -21,6 +26,11 @@ class BaseAgent:
 
 class ClaudeAgent(BaseAgent):
     name = "claude"
+
+    def build_launch_cmd(self, session_name: str, prompt: str) -> str:
+        import shlex
+
+        return f"{self.cmd} -n {shlex.quote(session_name)} {shlex.quote(prompt)}"
 
 
 class CodexAgent(BaseAgent):
