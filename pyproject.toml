@@ -1,6 +1,6 @@
 [project]
 name = "ai-launchpad"
-version = "0.5.0"
+version = "0.6.0"
 requires-python = ">=3.12"
 dependencies = ["requests>=2.31.0"]
 
