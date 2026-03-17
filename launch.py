@@ -1,4 +1,5 @@
 import subprocess
+import time
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -220,6 +221,13 @@ def _start_agent_in_context(
             launch_cmd,
         ],
         check=True,
+    )
+
+    # Accept the agent's initial directory trust prompt
+    time.sleep(2)
+    subprocess.run(
+        ["tmux", "send-keys", "-t", session_name, "Enter"],
+        check=False,
     )
 
 

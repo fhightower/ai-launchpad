@@ -345,18 +345,20 @@ class TestStartAgentInContext:
         with pytest.raises(ValueError, match="empty"):
             _start_agent_in_context(tmp_path, agent, "prompt")
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
-    def test_passes_prompt_to_agent_command(self, _mock_config, mock_run, tmp_path):
+    def test_passes_prompt_to_agent_command(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, CodexAgent(), "my prompt")
         first_call = mock_run.call_args_list[0].args[0]
         assert "tmux" in first_call
         assert "new-session" in first_call
         assert first_call[-1] == "codex 'my prompt'"
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
-    def test_session_name_is_context_path_name(self, _mock_config, mock_run, tmp_path):
+    def test_session_name_is_context_path_name(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
         _start_agent_in_context(context, ClaudeAgent(), "prompt")
@@ -364,47 +366,63 @@ class TestStartAgentInContext:
         s_index = cmd.index("-s")
         assert cmd[s_index + 1] == "fix-bug-claude"
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
-    def test_claude_includes_name_flag(self, _mock_config, mock_run, tmp_path):
+    def test_claude_includes_name_flag(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
         _start_agent_in_context(context, ClaudeAgent(), "my prompt")
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "claude -n fix-bug-claude 'my prompt'"
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
-    def test_codex_does_not_include_name_flag(self, _mock_config, mock_run, tmp_path):
+    def test_codex_does_not_include_name_flag(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-codex"
         context.mkdir()
         _start_agent_in_context(context, CodexAgent(), "my prompt")
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "codex 'my prompt'"
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
-    def test_defaults_to_context_path(self, _mock_config, mock_run, tmp_path):
+    def test_defaults_to_context_path(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={"tmux_start_dir": "/custom/dir"})
-    def test_uses_configured_tmux_start_dir(self, _mock_config, mock_run, tmp_path):
+    def test_uses_configured_tmux_start_dir(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == "/custom/dir"
 
+    @patch("launch.time.sleep")
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={"tmux_start_dir": ""})
-    def test_empty_tmux_start_dir_falls_back_to_context_path(self, _mock_config, mock_run, tmp_path):
+    def test_empty_tmux_start_dir_falls_back_to_context_path(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
+
+    @patch("launch.time.sleep")
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={})
+    def test_sends_enter_to_accept_trust_prompt(self, _mock_config, mock_run, mock_sleep, tmp_path):
+        context = tmp_path / "fix-bug-claude"
+        context.mkdir()
+        _start_agent_in_context(context, ClaudeAgent(), "prompt")
+        mock_sleep.assert_called_once_with(2)
+        send_keys_call = mock_run.call_args_list[1].args[0]
+        assert send_keys_call == ["tmux", "send-keys", "-t", "fix-bug-claude", "Enter"]
 
 
 # ---------------------------------------------------------------------------
