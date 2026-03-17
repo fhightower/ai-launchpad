@@ -49,6 +49,22 @@ class TestConfirmWorkItems:
         monkeypatch.setattr("builtins.input", lambda _: "")
         assert _confirm_work_items([_make_work_item()]) == []
 
+    def test_prompts_for_missing_source_dirs(self, monkeypatch):
+        answers = iter(["repo-x", "y"])
+        monkeypatch.setattr("builtins.input", lambda _: next(answers))
+        item = _make_work_item(relevant_source_directories=[])
+        confirmed = _confirm_work_items([item])
+        assert len(confirmed) == 1
+        assert confirmed[0]["relevant_source_directories"] == ["repo-x"]
+
+    def test_missing_source_dirs_can_be_skipped(self, monkeypatch):
+        answers = iter(["", "y"])
+        monkeypatch.setattr("builtins.input", lambda _: next(answers))
+        item = _make_work_item(relevant_source_directories=[])
+        confirmed = _confirm_work_items([item])
+        assert len(confirmed) == 1
+        assert confirmed[0]["relevant_source_directories"] == []
+
 
 # ---------------------------------------------------------------------------
 # _get_work_items
