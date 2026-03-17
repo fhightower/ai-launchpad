@@ -356,6 +356,16 @@ class TestStartAgentInContext:
 
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
+    def test_session_name_is_context_path_name(self, _mock_config, mock_run, tmp_path):
+        context = tmp_path / "fix-bug-claude"
+        context.mkdir()
+        _start_agent_in_context(context, "claude", "prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        s_index = cmd.index("-s")
+        assert cmd[s_index + 1] == "fix-bug-claude"
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={})
     def test_defaults_to_context_path(self, _mock_config, mock_run, tmp_path):
         _start_agent_in_context(tmp_path, "claude", "prompt")
         cmd = mock_run.call_args_list[0].args[0]

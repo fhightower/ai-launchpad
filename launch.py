@@ -203,8 +203,7 @@ def _start_agent_in_context(
     agent_args = shlex.split(agent_cmd)
     if not agent_args:
         raise ValueError("Agent command is empty.")
-    safe_agent = slugify(agent_cmd) or "agent"
-    session_name = f"{context_path.name}-{safe_agent}"
+    session_name = context_path.name
     launch_cmd = f"{agent_cmd} {shlex.quote(agent_prompt)}"
 
     start_dir = read_config().get("tmux_start_dir") or str(context_path)
