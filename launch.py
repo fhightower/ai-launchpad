@@ -1,4 +1,3 @@
-import shlex
 import subprocess
 from argparse import ArgumentParser
 from pathlib import Path
@@ -65,15 +64,17 @@ def _get_current_branch(source_path: Path) -> str:
 
 
 def _wait_for_expected_source_branch(source_path: Path, expected_branch: str) -> None:
-    while True:
-        current_branch = _get_current_branch(source_path)
-        if current_branch == expected_branch:
-            return
-        print(
-            f"Source repository {source_path} is on branch "
-            f"'{current_branch}', expected '{expected_branch}'."
-        )
-        input("Switch branches and press Enter to continue re-checking: ")
+    current_branch = _get_current_branch(source_path)
+    if current_branch == expected_branch:
+        return
+    print(
+        f"Source repository {source_path} is on branch "
+        f"'{current_branch}', expected '{expected_branch}'."
+    )
+    input(
+        f"Switch to '{expected_branch}' and press Enter, "
+        "or press Enter to continue on the current branch: "
+    )
 
 
 def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> None:
@@ -198,13 +199,12 @@ def _create_context(work_item: WorkItem, agent: BaseAgent) -> Path:
 
 
 def _start_agent_in_context(
-    context_path: Path, agent_cmd: str, agent_prompt: str
+    context_path: Path, agent: BaseAgent, agent_prompt: str
 ) -> None:
-    agent_args = shlex.split(agent_cmd)
-    if not agent_args:
+    if not agent.cmd:
         raise ValueError("Agent command is empty.")
     session_name = context_path.name
-    launch_cmd = f"{agent_cmd} {shlex.quote(agent_prompt)}"
+    launch_cmd = agent.build_launch_cmd(session_name, agent_prompt)
 
     start_dir = read_config().get("tmux_start_dir") or str(context_path)
 
@@ -240,7 +240,7 @@ def lift_off(sources: list[BaseSource], agent: BaseAgent):
     for work_item in _get_work_items(sources):
         context_path = _create_context(work_item, agent)
         prompt = agent.generate_prompt()
-        _start_agent_in_context(context_path, agent.cmd, prompt)
+        _start_agent_in_context(context_path, agent, prompt)
 
 
 def start_launch_sequence(argv: list[str] | None = None) -> None:

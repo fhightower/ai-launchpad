@@ -313,7 +313,7 @@ class TestCopyRelevantSourceSubprocess:
             "expected_source_repo_branch": "development",
         },
     )
-    def test_expected_branch_mismatch_prompts_and_rechecks(
+    def test_expected_branch_mismatch_prompts_and_continues(
         self, _mock_config, mock_run, mock_input, tmp_path
     ):
         source = tmp_path / "repo"
@@ -323,7 +323,6 @@ class TestCopyRelevantSourceSubprocess:
 
         mock_run.side_effect = [
             MagicMock(stdout="main\n"),
-            MagicMock(stdout="development\n"),
             MagicMock(returncode=1),
             MagicMock(returncode=0),
         ]
@@ -332,8 +331,7 @@ class TestCopyRelevantSourceSubprocess:
 
         mock_input.assert_called_once()
         assert "rev-parse" in mock_run.call_args_list[0].args[0]
-        assert "rev-parse" in mock_run.call_args_list[1].args[0]
-        worktree_call = mock_run.call_args_list[3]
+        worktree_call = mock_run.call_args_list[2]
         assert "worktree" in worktree_call.args[0]
 
 
@@ -342,32 +340,52 @@ class TestCopyRelevantSourceSubprocess:
 # ---------------------------------------------------------------------------
 class TestStartAgentInContext:
     def test_empty_command_raises(self, tmp_path):
+        agent = MagicMock()
+        agent.cmd = ""
         with pytest.raises(ValueError, match="empty"):
-            _start_agent_in_context(tmp_path, "", "prompt")
+            _start_agent_in_context(tmp_path, agent, "prompt")
 
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
     def test_passes_prompt_to_agent_command(self, _mock_config, mock_run, tmp_path):
-        _start_agent_in_context(tmp_path, "claude", "my prompt")
+        _start_agent_in_context(tmp_path, CodexAgent(), "my prompt")
         first_call = mock_run.call_args_list[0].args[0]
         assert "tmux" in first_call
         assert "new-session" in first_call
-        assert first_call[-1] == "claude 'my prompt'"
+        assert first_call[-1] == "codex 'my prompt'"
 
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
     def test_session_name_is_context_path_name(self, _mock_config, mock_run, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
-        _start_agent_in_context(context, "claude", "prompt")
+        _start_agent_in_context(context, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         s_index = cmd.index("-s")
         assert cmd[s_index + 1] == "fix-bug-claude"
 
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={})
+    def test_claude_includes_name_flag(self, _mock_config, mock_run, tmp_path):
+        context = tmp_path / "fix-bug-claude"
+        context.mkdir()
+        _start_agent_in_context(context, ClaudeAgent(), "my prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        assert cmd[-1] == "claude -n fix-bug-claude 'my prompt'"
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={})
+    def test_codex_does_not_include_name_flag(self, _mock_config, mock_run, tmp_path):
+        context = tmp_path / "fix-bug-codex"
+        context.mkdir()
+        _start_agent_in_context(context, CodexAgent(), "my prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        assert cmd[-1] == "codex 'my prompt'"
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={})
     def test_defaults_to_context_path(self, _mock_config, mock_run, tmp_path):
-        _start_agent_in_context(tmp_path, "claude", "prompt")
+        _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
@@ -375,7 +393,7 @@ class TestStartAgentInContext:
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={"tmux_start_dir": "/custom/dir"})
     def test_uses_configured_tmux_start_dir(self, _mock_config, mock_run, tmp_path):
-        _start_agent_in_context(tmp_path, "claude", "prompt")
+        _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == "/custom/dir"
@@ -383,7 +401,7 @@ class TestStartAgentInContext:
     @patch("launch.subprocess.run")
     @patch("launch.read_config", return_value={"tmux_start_dir": ""})
     def test_empty_tmux_start_dir_falls_back_to_context_path(self, _mock_config, mock_run, tmp_path):
-        _start_agent_in_context(tmp_path, "claude", "prompt")
+        _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
@@ -508,9 +526,9 @@ class TestLaunch:
         lift_off([], agent)
         mock_ctx.assert_called_once_with(item, agent)
         mock_start.assert_called_once()
-        _, kwargs = mock_start.call_args
-        prompt = mock_start.call_args.args[2]
-        assert "task.md" in prompt
+        call_args = mock_start.call_args.args
+        assert call_args[1] is agent
+        assert "task.md" in call_args[2]
 
 
 # ---------------------------------------------------------------------------
