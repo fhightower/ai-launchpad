@@ -346,12 +346,37 @@ class TestStartAgentInContext:
             _start_agent_in_context(tmp_path, "", "prompt")
 
     @patch("launch.subprocess.run")
-    def test_passes_prompt_to_agent_command(self, mock_run, tmp_path):
+    @patch("launch.read_config", return_value={})
+    def test_passes_prompt_to_agent_command(self, _mock_config, mock_run, tmp_path):
         _start_agent_in_context(tmp_path, "claude", "my prompt")
         first_call = mock_run.call_args_list[0].args[0]
         assert "tmux" in first_call
         assert "new-session" in first_call
         assert first_call[-1] == "claude 'my prompt'"
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={})
+    def test_defaults_to_context_path(self, _mock_config, mock_run, tmp_path):
+        _start_agent_in_context(tmp_path, "claude", "prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        c_index = cmd.index("-c")
+        assert cmd[c_index + 1] == str(tmp_path)
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={"tmux_start_dir": "/custom/dir"})
+    def test_uses_configured_tmux_start_dir(self, _mock_config, mock_run, tmp_path):
+        _start_agent_in_context(tmp_path, "claude", "prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        c_index = cmd.index("-c")
+        assert cmd[c_index + 1] == "/custom/dir"
+
+    @patch("launch.subprocess.run")
+    @patch("launch.read_config", return_value={"tmux_start_dir": ""})
+    def test_empty_tmux_start_dir_falls_back_to_context_path(self, _mock_config, mock_run, tmp_path):
+        _start_agent_in_context(tmp_path, "claude", "prompt")
+        cmd = mock_run.call_args_list[0].args[0]
+        c_index = cmd.index("-c")
+        assert cmd[c_index + 1] == str(tmp_path)
 
 
 # ---------------------------------------------------------------------------

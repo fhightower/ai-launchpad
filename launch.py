@@ -207,6 +207,8 @@ def _start_agent_in_context(
     session_name = f"{context_path.name}-{safe_agent}"
     launch_cmd = f"{agent_cmd} {shlex.quote(agent_prompt)}"
 
+    start_dir = read_config().get("tmux_start_dir") or str(context_path)
+
     subprocess.run(
         [
             "tmux",
@@ -215,7 +217,7 @@ def _start_agent_in_context(
             session_name,
             "-d",
             "-c",
-            str(context_path),
+            start_dir,
             launch_cmd,
         ],
         check=True,
