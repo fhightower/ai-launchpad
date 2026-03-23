@@ -19,19 +19,19 @@ def _confirm_work_items(work_items: list[WorkItem]) -> list[WorkItem]:
         source_dirs = work_item["relevant_source_directories"]
         source_dirs_text = ", ".join(source_dirs) if source_dirs else "(none)"
         print(f"Source dirs: {source_dirs_text}")
-        if not source_dirs:
-            response = input(
-                "No source directories found. "
-                "Enter source directory path(s) (comma-separated) or leave blank to continue: "
-            ).strip()
-            if response:
-                work_item["relevant_source_directories"] = [
-                    entry.strip()
-                    for entry in response.split(",")
-                    if entry.strip()
-                ]
         response = input("Queue this work item? [y/N]: ").strip().lower()
         if response == "y":
+            if not source_dirs:
+                response = input(
+                    "No source directories found. "
+                    "Enter source directory path(s) (comma-separated) or leave blank to continue: "
+                ).strip()
+                if response:
+                    work_item["relevant_source_directories"] = [
+                        entry.strip()
+                        for entry in response.split(",")
+                        if entry.strip()
+                    ]
             confirmed.append(work_item)
     return confirmed
 

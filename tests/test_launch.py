@@ -50,7 +50,7 @@ class TestConfirmWorkItems:
         assert _confirm_work_items([_make_work_item()]) == []
 
     def test_prompts_for_missing_source_dirs(self, monkeypatch):
-        answers = iter(["repo-x", "y"])
+        answers = iter(["y", "repo-x"])
         monkeypatch.setattr("builtins.input", lambda _: next(answers))
         item = _make_work_item(relevant_source_directories=[])
         confirmed = _confirm_work_items([item])
@@ -58,12 +58,19 @@ class TestConfirmWorkItems:
         assert confirmed[0]["relevant_source_directories"] == ["repo-x"]
 
     def test_missing_source_dirs_can_be_skipped(self, monkeypatch):
-        answers = iter(["", "y"])
+        answers = iter(["y", ""])
         monkeypatch.setattr("builtins.input", lambda _: next(answers))
         item = _make_work_item(relevant_source_directories=[])
         confirmed = _confirm_work_items([item])
         assert len(confirmed) == 1
         assert confirmed[0]["relevant_source_directories"] == []
+
+    def test_no_source_dir_prompt_when_not_queued(self, monkeypatch):
+        answers = iter(["n"])
+        monkeypatch.setattr("builtins.input", lambda _: next(answers))
+        item = _make_work_item(relevant_source_directories=[])
+        confirmed = _confirm_work_items([item])
+        assert confirmed == []
 
 
 # ---------------------------------------------------------------------------
