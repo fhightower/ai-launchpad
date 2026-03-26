@@ -33,6 +33,9 @@ Set `github.access_token` in `config.toml` if queries need private-repo access.
 # Pull issues using a GitHub issue query for one repo
 uv run python launch.py --github-issue-query "repo:owner/repo is:open label:bug sort:updated-desc"
 
+# Launch a single issue by number
+uv run python launch.py --github-issue-query "repo:owner/repo is:issue 123"
+
 # Mix and match multiple sources
 uv run python launch.py \
   --todo-file ./todo \
@@ -40,12 +43,17 @@ uv run python launch.py \
   --github-issue-query "org:owner is:open label:bug"
 ```
 
+The query uses [GitHub's issue search syntax](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). To target a single issue, include the issue number directly in the query string along with the repo qualifier.
+
 ### Jira Sources
 
 You can load work items from Jira using JQL:
 
 ```bash
 uv run python launch.py --jira-jql "project = CORE AND status = 'Backlog' ORDER BY created DESC"
+
+# Launch a single Jira ticket by key
+uv run python launch.py --jira-jql "key = CORE-123"
 ```
 
 Required config for Jira (set in `config.toml`):
