@@ -41,12 +41,10 @@ class TestBaseAgent:
         "agents.read_config",
         return_value={"custom_agent_message": "Be thorough!"},
     )
-    def test_generate_prompt_with_custom_message_still_references_task_md(
-        self, _mock_config
-    ):
+    def test_generate_prompt_with_custom_message_replaces_default(self, _mock_config):
         agent = BaseAgent()
         prompt = agent.generate_prompt()
-        assert "task.md" in prompt
+        assert "task.md" not in prompt
 
     @patch("agents.read_config", return_value={})
     def test_generate_prompt_without_custom_message__no_extra_blank_lines(

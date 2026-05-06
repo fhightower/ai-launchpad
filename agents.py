@@ -14,14 +14,9 @@ class BaseAgent:
         return f"{self.cmd} {shlex.quote(prompt)}"
 
     def generate_prompt(self) -> str:
-        lines = [
-            "Read task.md for your work item. Feel free to ask me any questions!",
-            "",
-        ]
         if custom_message := read_config().get("custom_agent_message"):
-            lines.append(custom_message)
-            lines.append("")
-        return "\n".join(lines)
+            return custom_message
+        return "Read task.md for your work item. Feel free to ask me any questions!"
 
 
 class ClaudeAgent(BaseAgent):
@@ -47,7 +42,5 @@ def get_agent(name: str) -> BaseAgent:
     agent_class = AGENT_REGISTRY.get(name)
     if agent_class is None:
         available = ", ".join(sorted(AGENT_REGISTRY))
-        raise ValueError(
-            f"Unknown agent {name!r}. Available agents: {available}"
-        )
+        raise ValueError(f"Unknown agent {name!r}. Available agents: {available}")
     return agent_class()
