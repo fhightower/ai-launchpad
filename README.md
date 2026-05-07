@@ -1,7 +1,7 @@
 # AI Launchpad
 [![Tests](https://github.com/fhightower/ai-launchpad/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/fhightower/ai-launchpad/actions/workflows/test.yml)
 
-A light-weight framework for making simultaneous agentic updates to a multiple repositories.
+A lightweight framework for making simultaneous agentic updates to multiple repositories.
 
 ## Initial Setup
 
@@ -17,10 +17,31 @@ Optional config:
 
 ## Quickstart
 
-Once this project is [setup](#initial-setup), you can get started with:
+Once this project is [set up](#initial-setup), you can get started with:
 
 ```bash
 uv run python launch.py -h
+```
+
+## Sources
+
+### Local TODO File Sources
+
+You can load work items from a local text file. Each line that starts with `- ` is treated as a work item title; all other lines are ignored. The file's parent directory is used as the relevant source directory for the items it contains.
+
+```bash
+# Load work items from a local todo file
+uv run python launch.py --todo-file ./todo
+
+# The flag can be repeated to combine multiple files
+uv run python launch.py --todo-file ./todo --todo-file ../other-repo/todo
+```
+
+Example `todo` file:
+
+```
+- Add retry logic to the upload client
+- Fix the off-by-one error in the pagination helper
 ```
 
 ### GitHub Issue Sources
