@@ -10,6 +10,7 @@ from launch import (
     _create_home_base,
     _copy_relevant_source,
     _copy_relevant_sources,
+    _normalize_source_dir,
     _write_cleanup_script,
     _write_task_file,
     _start_agent_in_context,
@@ -132,6 +133,26 @@ class TestCopyRelevantSource:
 
 
 # ---------------------------------------------------------------------------
+# _normalize_source_dir
+# ---------------------------------------------------------------------------
+class TestNormalizeSourceDir:
+    def test_lowercases(self):
+        assert _normalize_source_dir("FooBar") == "foobar"
+
+    def test_replaces_spaces_with_hyphens(self):
+        assert _normalize_source_dir("Foo Bar") == "foo-bar"
+
+    def test_handles_multiple_spaces(self):
+        assert _normalize_source_dir("Foo Bar Baz") == "foo-bar-baz"
+
+    def test_already_normalized__unchanged(self):
+        assert _normalize_source_dir("foo-bar") == "foo-bar"
+
+    def test_empty_string(self):
+        assert _normalize_source_dir("") == ""
+
+
+# ---------------------------------------------------------------------------
 # _copy_relevant_sources
 # ---------------------------------------------------------------------------
 class TestCopyRelevantSources:
@@ -141,6 +162,26 @@ class TestCopyRelevantSources:
         _copy_relevant_sources(item, tmp_path)
         captured = capsys.readouterr()
         assert "Warning" in captured.out
+
+    @patch("launch._copy_relevant_source")
+    @patch("launch.read_config", return_value={"base_source_dir": "/src"})
+    def test_normalizes_source_dir_with_spaces(
+        self, _mock_config, mock_copy, tmp_path
+    ):
+        item = _make_work_item(relevant_source_directories=["Foo Bar"])
+        _copy_relevant_sources(item, tmp_path)
+        passed_source_dir = mock_copy.call_args.args[0]
+        assert passed_source_dir == "foo-bar"
+
+    @patch("launch._copy_relevant_source")
+    @patch("launch.read_config", return_value={"base_source_dir": "/src"})
+    def test_absolute_source_dir_not_normalized(
+        self, _mock_config, mock_copy, tmp_path
+    ):
+        item = _make_work_item(relevant_source_directories=["/Absolute/Repo Name"])
+        _copy_relevant_sources(item, tmp_path)
+        passed_source_dir = mock_copy.call_args.args[0]
+        assert passed_source_dir == "/Absolute/Repo Name"
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +220,16 @@ class TestWriteCleanupScript:
         _write_cleanup_script(home_base, item, agent)
         content = (home_base / "cleanup.sh").read_text()
         assert "/absolute/repo" in content
+
+    @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
+    def test_normalizes_source_dir_with_spaces(self, _mock_config, tmp_path):
+        home_base = tmp_path / "task"
+        home_base.mkdir()
+        item = _make_work_item(relevant_source_directories=["Foo Bar"])
+        agent = ClaudeAgent()
+        _write_cleanup_script(home_base, item, agent)
+        content = (home_base / "cleanup.sh").read_text()
+        assert "/src/foo-bar" in content
 
 
 # ---------------------------------------------------------------------------

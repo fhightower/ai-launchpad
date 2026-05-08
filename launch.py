@@ -123,10 +123,14 @@ def _copy_relevant_source(source_dir: str, new_branch: str, home_base: Path) -> 
     subprocess.run(cmd, check=True)
 
 
+def _normalize_source_dir(source_dir: str) -> str:
+    return source_dir.lower().replace(" ", "-")
+
+
 def _copy_relevant_sources(work_item: WorkItem, home_base: Path) -> None:
     for source_dir in work_item["relevant_source_directories"]:
         if not Path(source_dir).is_absolute():
-            source_dir = source_dir.lower()
+            source_dir = _normalize_source_dir(source_dir)
         try:
             _copy_relevant_source(source_dir, home_base.name, home_base)
         except (ValueError, subprocess.CalledProcessError) as exc:
@@ -149,7 +153,7 @@ def _write_cleanup_script(
         if source_dir_path.is_absolute():
             source_path = source_dir_path
         else:
-            source_path = Path(base_source_dir) / source_dir.lower()
+            source_path = Path(base_source_dir) / _normalize_source_dir(source_dir)
         source_repos.append(str(source_path))
         worktree_paths.append(str(home_base / source_path.name))
 
