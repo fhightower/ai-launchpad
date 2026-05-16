@@ -19,9 +19,13 @@ def _missing_required_fields(
     return missing_fields
 
 
+def _default_config_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "config.toml"
+
+
 @lru_cache(maxsize=1)
 def read_config() -> dict:
-    config_path = Path(__file__).with_name("config.toml")
+    config_path = _default_config_path()
     config = _read_toml(config_path)
 
     if not config:

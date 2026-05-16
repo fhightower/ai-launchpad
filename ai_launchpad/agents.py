@@ -1,4 +1,4 @@
-from config import read_config
+from ai_launchpad.config import read_config
 
 
 class BaseAgent:

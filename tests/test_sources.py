@@ -4,8 +4,8 @@ from unittest.mock import patch, MagicMock
 
 import requests
 
-from data_models import WorkItem
-from sources import (
+from ai_launchpad.data_models import WorkItem
+from ai_launchpad.sources import (
     BaseSource,
     LocalTodoFileSource,
     GitHubIssuesSource,
@@ -98,12 +98,12 @@ class TestGitHubIssuesSource:
         with pytest.raises(ValueError, match="cannot be empty"):
             GitHubIssuesSource("   ")
 
-    @patch("sources.read_config", return_value={**BASE_CONFIG})
+    @patch("ai_launchpad.sources.read_config", return_value={**BASE_CONFIG})
     def test_init_without_token(self, _mock_config):
         source = GitHubIssuesSource("repo:a/b is:open")
         assert "Authorization" not in source._session.headers
 
-    @patch("sources.read_config", return_value={**BASE_CONFIG, "github": {"access_token": "ghp_test123"}})
+    @patch("ai_launchpad.sources.read_config", return_value={**BASE_CONFIG, "github": {"access_token": "ghp_test123"}})
     def test_init_with_token(self, _mock_config):
         source = GitHubIssuesSource("repo:a/b is:open")
         assert source._session.headers["Authorization"] == "Bearer ghp_test123"
@@ -250,7 +250,7 @@ class TestGitHubIssuesSource:
 class TestJiraJqlSource:
     @pytest.fixture(autouse=True)
     def _clear_config_cache(self):
-        from config import read_config
+        from ai_launchpad.config import read_config
 
         read_config.cache_clear()
         yield
@@ -265,7 +265,7 @@ class TestJiraJqlSource:
                 "api_token": "tok",
             },
         }
-        with patch("sources.read_config", return_value=config):
+        with patch("ai_launchpad.sources.read_config", return_value=config):
             return JiraJqlSource(jql)
 
     def test_empty_jql_raises(self):
@@ -275,7 +275,7 @@ class TestJiraJqlSource:
     def test_missing_org_raises(self):
         config = {**BASE_CONFIG, "jira": {"email": "a@b.c", "api_token": "t"}}
         with (
-            patch("sources.read_config", return_value=config),
+            patch("ai_launchpad.sources.read_config", return_value=config),
             pytest.raises(ValueError, match="org_name"),
         ):
             JiraJqlSource("project = X")
@@ -283,7 +283,7 @@ class TestJiraJqlSource:
     def test_missing_email_raises(self):
         config = {**BASE_CONFIG, "jira": {"org_name": "org", "api_token": "t"}}
         with (
-            patch("sources.read_config", return_value=config),
+            patch("ai_launchpad.sources.read_config", return_value=config),
             pytest.raises(ValueError, match="jira.email"),
         ):
             JiraJqlSource("project = X")

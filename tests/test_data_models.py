@@ -1,4 +1,4 @@
-from data_models import WorkItem
+from ai_launchpad.data_models import WorkItem
 
 
 class TestWorkItem:

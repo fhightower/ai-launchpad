@@ -8,8 +8,8 @@ from urllib.parse import urlencode
 import requests
 from requests.auth import HTTPBasicAuth
 
-from config import read_config
-from data_models import WorkItem
+from ai_launchpad.config import read_config
+from ai_launchpad.data_models import WorkItem
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100

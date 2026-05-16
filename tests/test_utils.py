@@ -1,6 +1,6 @@
 import pytest
 
-from utils import slugify
+from ai_launchpad.utils import slugify
 
 
 class TestSlugify:

@@ -2,9 +2,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from agents import ClaudeAgent, CodexAgent
-from data_models import WorkItem
-from launch import (
+from ai_launchpad.agents import ClaudeAgent, CodexAgent
+from ai_launchpad.data_models import WorkItem
+from ai_launchpad.launch import (
     _confirm_work_items,
     _get_work_items,
     _create_home_base,
@@ -92,17 +92,17 @@ class TestGetWorkItems:
 # _create_home_base
 # ---------------------------------------------------------------------------
 class TestCreateHomeBase:
-    @patch("launch.read_config", return_value={"base_worktrees_dir": ""})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_worktrees_dir": ""})
     def test_creates_directory(self, _mock_config, tmp_path):
         with patch(
-            "launch.read_config",
+            "ai_launchpad.launch.read_config",
             return_value={"base_worktrees_dir": str(tmp_path)},
         ):
             home = _create_home_base("my-task")
         assert home.exists()
         assert home.name == "my-task"
 
-    @patch("launch.read_config")
+    @patch("ai_launchpad.launch.read_config")
     def test_idempotent(self, mock_config, tmp_path):
         mock_config.return_value = {"base_worktrees_dir": str(tmp_path)}
         _create_home_base("task")
@@ -113,13 +113,13 @@ class TestCreateHomeBase:
 # _copy_relevant_source
 # ---------------------------------------------------------------------------
 class TestCopyRelevantSource:
-    @patch("launch.read_config")
+    @patch("ai_launchpad.launch.read_config")
     def test_source_not_found_raises(self, mock_config, tmp_path):
         mock_config.return_value = {"base_source_dir": str(tmp_path)}
         with pytest.raises(ValueError, match="does not exist"):
             _copy_relevant_source("nonexistent", "branch", tmp_path / "dest")
 
-    @patch("launch.read_config")
+    @patch("ai_launchpad.launch.read_config")
     def test_destination_exists_raises(self, mock_config, tmp_path):
         source_dir = tmp_path / "source" / "repo"
         source_dir.mkdir(parents=True)
@@ -156,15 +156,15 @@ class TestNormalizeSourceDir:
 # _copy_relevant_sources
 # ---------------------------------------------------------------------------
 class TestCopyRelevantSources:
-    @patch("launch.read_config", return_value={"base_source_dir": "/nonexistent"})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/nonexistent"})
     def test_handles_errors_gracefully(self, _mock_config, tmp_path, capsys):
         item = _make_work_item(relevant_source_directories=["bad-repo"])
         _copy_relevant_sources(item, tmp_path)
         captured = capsys.readouterr()
         assert "Warning" in captured.out
 
-    @patch("launch._copy_relevant_source")
-    @patch("launch.read_config", return_value={"base_source_dir": "/src"})
+    @patch("ai_launchpad.launch._copy_relevant_source")
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src"})
     def test_normalizes_source_dir_with_spaces(
         self, _mock_config, mock_copy, tmp_path
     ):
@@ -173,8 +173,8 @@ class TestCopyRelevantSources:
         passed_source_dir = mock_copy.call_args.args[0]
         assert passed_source_dir == "foo-bar"
 
-    @patch("launch._copy_relevant_source")
-    @patch("launch.read_config", return_value={"base_source_dir": "/src"})
+    @patch("ai_launchpad.launch._copy_relevant_source")
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src"})
     def test_absolute_source_dir_not_normalized(
         self, _mock_config, mock_copy, tmp_path
     ):
@@ -188,7 +188,7 @@ class TestCopyRelevantSources:
 # _write_cleanup_script
 # ---------------------------------------------------------------------------
 class TestWriteCleanupScript:
-    @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_creates_cleanup_script(self, _mock_config, tmp_path):
         home_base = tmp_path / "my-task-claude"
         home_base.mkdir()
@@ -201,7 +201,7 @@ class TestWriteCleanupScript:
         assert "my-task-claude" in content
         assert "/src/repo-a" in content
 
-    @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_cleanup_script_is_executable(self, _mock_config, tmp_path):
         home_base = tmp_path / "task"
         home_base.mkdir()
@@ -211,7 +211,7 @@ class TestWriteCleanupScript:
         cleanup = home_base / "cleanup.sh"
         assert cleanup.stat().st_mode & 0o755
 
-    @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_absolute_source_dir(self, _mock_config, tmp_path):
         home_base = tmp_path / "task"
         home_base.mkdir()
@@ -221,7 +221,7 @@ class TestWriteCleanupScript:
         content = (home_base / "cleanup.sh").read_text()
         assert "/absolute/repo" in content
 
-    @patch("launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"})
     def test_normalizes_source_dir_with_spaces(self, _mock_config, tmp_path):
         home_base = tmp_path / "task"
         home_base.mkdir()
@@ -302,8 +302,8 @@ class TestWriteTaskFile:
 # _copy_relevant_source
 # ---------------------------------------------------------------------------
 class TestCopyRelevantSourceSubprocess:
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={"base_source_dir": ""})
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": ""})
     def test_calls_git_worktree_new_branch(self, _mock_config, mock_run, tmp_path):
         source = tmp_path / "repo"
         source.mkdir()
@@ -317,8 +317,8 @@ class TestCopyRelevantSourceSubprocess:
         assert "worktree" in worktree_call.args[0]
         assert "-b" in worktree_call.args[0]
 
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={"base_source_dir": ""})
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={"base_source_dir": ""})
     def test_calls_git_worktree_existing_branch(self, _mock_config, mock_run, tmp_path):
         source = tmp_path / "repo"
         source.mkdir()
@@ -332,9 +332,9 @@ class TestCopyRelevantSourceSubprocess:
         assert "-b" not in worktree_call.args[0]
 
     @patch("builtins.input")
-    @patch("launch.subprocess.run")
+    @patch("ai_launchpad.launch.subprocess.run")
     @patch(
-        "launch.read_config",
+        "ai_launchpad.launch.read_config",
         return_value={
             "base_source_dir": "",
             "expected_source_repo_branch": "development",
@@ -363,9 +363,9 @@ class TestCopyRelevantSourceSubprocess:
         assert "-b" in worktree_call.args[0]
 
     @patch("builtins.input", return_value="")
-    @patch("launch.subprocess.run")
+    @patch("ai_launchpad.launch.subprocess.run")
     @patch(
-        "launch.read_config",
+        "ai_launchpad.launch.read_config",
         return_value={
             "base_source_dir": "",
             "expected_source_repo_branch": "development",
@@ -403,9 +403,9 @@ class TestStartAgentInContext:
         with pytest.raises(ValueError, match="empty"):
             _start_agent_in_context(tmp_path, agent, "prompt")
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_passes_prompt_to_agent_command(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, CodexAgent(), "my prompt")
         first_call = mock_run.call_args_list[0].args[0]
@@ -413,9 +413,9 @@ class TestStartAgentInContext:
         assert "new-session" in first_call
         assert first_call[-1] == "codex 'my prompt'"
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_session_name_is_context_path_name(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
@@ -424,9 +424,9 @@ class TestStartAgentInContext:
         s_index = cmd.index("-s")
         assert cmd[s_index + 1] == "fix-bug-claude"
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_claude_includes_name_flag(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
@@ -434,9 +434,9 @@ class TestStartAgentInContext:
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "claude -n fix-bug-claude 'my prompt'"
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_codex_does_not_include_name_flag(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-codex"
         context.mkdir()
@@ -444,36 +444,36 @@ class TestStartAgentInContext:
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "codex 'my prompt'"
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_defaults_to_context_path(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={"tmux_start_dir": "/custom/dir"})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={"tmux_start_dir": "/custom/dir"})
     def test_uses_configured_tmux_start_dir(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == "/custom/dir"
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={"tmux_start_dir": ""})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={"tmux_start_dir": ""})
     def test_empty_tmux_start_dir_falls_back_to_context_path(self, _mock_config, mock_run, _mock_sleep, tmp_path):
         _start_agent_in_context(tmp_path, ClaudeAgent(), "prompt")
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
 
-    @patch("launch.time.sleep")
-    @patch("launch.subprocess.run")
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.time.sleep")
+    @patch("ai_launchpad.launch.subprocess.run")
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_sends_enter_to_accept_trust_prompt(self, _mock_config, mock_run, mock_sleep, tmp_path):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
@@ -487,17 +487,17 @@ class TestStartAgentInContext:
 # _resolve_agent
 # ---------------------------------------------------------------------------
 class TestResolveAgent:
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_cli_agent_takes_precedence(self, _mock_config):
         agent = _resolve_agent("claude")
         assert isinstance(agent, ClaudeAgent)
 
-    @patch("launch.read_config", return_value={"default_agent": "claude"})
+    @patch("ai_launchpad.launch.read_config", return_value={"default_agent": "claude"})
     def test_config_agent_used_when_no_cli(self, _mock_config):
         agent = _resolve_agent(None)
         assert isinstance(agent, ClaudeAgent)
 
-    @patch("launch.read_config", return_value={})
+    @patch("ai_launchpad.launch.read_config", return_value={})
     def test_raises_when_no_agent_specified(self, _mock_config):
         with pytest.raises(ValueError, match="No agent specified"):
             _resolve_agent(None)
@@ -511,10 +511,10 @@ class TestResolveAgent:
 # _create_context
 # ---------------------------------------------------------------------------
 class TestCreateContext:
-    @patch("launch._write_task_file")
-    @patch("launch._write_cleanup_script")
-    @patch("launch._copy_relevant_sources")
-    @patch("launch._create_home_base")
+    @patch("ai_launchpad.launch._write_task_file")
+    @patch("ai_launchpad.launch._write_cleanup_script")
+    @patch("ai_launchpad.launch._copy_relevant_sources")
+    @patch("ai_launchpad.launch._create_home_base")
     def test_orchestration(self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path):
         mock_home.return_value = tmp_path / "ctx"
         (tmp_path / "ctx").mkdir()
@@ -527,10 +527,10 @@ class TestCreateContext:
         mock_task.assert_called_once_with(tmp_path / "ctx", item)
         assert result == tmp_path / "ctx"
 
-    @patch("launch._write_task_file")
-    @patch("launch._write_cleanup_script")
-    @patch("launch._copy_relevant_sources")
-    @patch("launch._create_home_base")
+    @patch("ai_launchpad.launch._write_task_file")
+    @patch("ai_launchpad.launch._write_cleanup_script")
+    @patch("ai_launchpad.launch._copy_relevant_sources")
+    @patch("ai_launchpad.launch._create_home_base")
     def test_context_name_includes_agent_name__home_base_contains_agent_slug(
         self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
@@ -540,10 +540,10 @@ class TestCreateContext:
         _create_context(item, agent)
         mock_home.assert_called_once_with("fix-bug-claude")
 
-    @patch("launch._write_task_file")
-    @patch("launch._write_cleanup_script")
-    @patch("launch._copy_relevant_sources")
-    @patch("launch._create_home_base")
+    @patch("ai_launchpad.launch._write_task_file")
+    @patch("ai_launchpad.launch._write_cleanup_script")
+    @patch("ai_launchpad.launch._copy_relevant_sources")
+    @patch("ai_launchpad.launch._create_home_base")
     def test_context_name_includes_codex_agent__home_base_contains_codex_slug(
         self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
@@ -553,10 +553,10 @@ class TestCreateContext:
         _create_context(item, agent)
         mock_home.assert_called_once_with("fix-bug-codex")
 
-    @patch("launch._write_task_file")
-    @patch("launch._write_cleanup_script")
-    @patch("launch._copy_relevant_sources")
-    @patch("launch._create_home_base")
+    @patch("ai_launchpad.launch._write_task_file")
+    @patch("ai_launchpad.launch._write_cleanup_script")
+    @patch("ai_launchpad.launch._copy_relevant_sources")
+    @patch("ai_launchpad.launch._create_home_base")
     def test_two_agents_same_work_item__different_context_names(
         self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
@@ -570,10 +570,10 @@ class TestCreateContext:
         assert path_codex.name == "fix-bug-codex"
         assert path_claude != path_codex
 
-    @patch("launch._write_task_file")
-    @patch("launch._write_cleanup_script")
-    @patch("launch._copy_relevant_sources")
-    @patch("launch._create_home_base")
+    @patch("ai_launchpad.launch._write_task_file")
+    @patch("ai_launchpad.launch._write_cleanup_script")
+    @patch("ai_launchpad.launch._copy_relevant_sources")
+    @patch("ai_launchpad.launch._create_home_base")
     def test_title_with_special_chars__context_name_slugified_with_agent(
         self, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
     ):
@@ -588,10 +588,10 @@ class TestCreateContext:
 # launch
 # ---------------------------------------------------------------------------
 class TestLaunch:
-    @patch("agents.read_config", return_value={})
-    @patch("launch._start_agent_in_context")
-    @patch("launch._create_context")
-    @patch("launch._get_work_items")
+    @patch("ai_launchpad.agents.read_config", return_value={})
+    @patch("ai_launchpad.launch._start_agent_in_context")
+    @patch("ai_launchpad.launch._create_context")
+    @patch("ai_launchpad.launch._get_work_items")
     def test_launch_processes_items(
         self, mock_get, mock_ctx, mock_start, _mock_read_config, tmp_path
     ):
@@ -611,8 +611,8 @@ class TestLaunch:
 # start_launch_sequence
 # ---------------------------------------------------------------------------
 class TestStartLaunchSequence:
-    @patch("launch.lift_off")
-    @patch("launch._resolve_agent")
+    @patch("ai_launchpad.launch.lift_off")
+    @patch("ai_launchpad.launch._resolve_agent")
     def test_parses_agent_arg(self, mock_resolve, mock_lift_off):
         agent = ClaudeAgent()
         mock_resolve.return_value = agent
@@ -620,16 +620,16 @@ class TestStartLaunchSequence:
         mock_resolve.assert_called_once_with("claude")
         mock_lift_off.assert_called_once_with([], agent)
 
-    @patch("launch.lift_off")
-    @patch("launch._resolve_agent")
+    @patch("ai_launchpad.launch.lift_off")
+    @patch("ai_launchpad.launch._resolve_agent")
     def test_default_agent_is_none(self, mock_resolve, mock_lift_off):
         agent = ClaudeAgent()
         mock_resolve.return_value = agent
         start_launch_sequence([])
         mock_resolve.assert_called_once_with(None)
 
-    @patch("launch.lift_off")
-    @patch("launch._resolve_agent")
+    @patch("ai_launchpad.launch.lift_off")
+    @patch("ai_launchpad.launch._resolve_agent")
     def test_passes_sources_from_args(self, mock_resolve, mock_lift_off, tmp_path):
         todo = tmp_path / "todo.txt"
         todo.write_text("- Task one\n")
