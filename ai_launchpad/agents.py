@@ -1,3 +1,7 @@
+import subprocess
+import time
+from pathlib import Path
+
 from ai_launchpad.config import read_config
 
 
@@ -17,6 +21,35 @@ class BaseAgent:
         if custom_message := read_config().get("custom_agent_message"):
             return custom_message
         return "Read task.md for your work item. Feel free to ask me any questions!"
+
+    def start_agent_in_context(self, context_path: Path, agent_prompt: str) -> None:
+        if not self.cmd:
+            raise ValueError("Agent command is empty.")
+        session_name = context_path.name
+        launch_cmd = self.build_launch_cmd(session_name, agent_prompt)
+
+        start_dir = read_config().get("tmux_start_dir") or str(context_path)
+
+        subprocess.run(
+            [
+                "tmux",
+                "new-session",
+                "-s",
+                session_name,
+                "-d",
+                "-c",
+                start_dir,
+                launch_cmd,
+            ],
+            check=True,
+        )
+
+        # Accept the agent's initial directory trust prompt
+        time.sleep(2)
+        subprocess.run(
+            ["tmux", "send-keys", "-t", session_name, "Enter"],
+            check=False,
+        )
 
 
 class ClaudeAgent(BaseAgent):
@@ -38,9 +71,22 @@ AGENT_REGISTRY: dict[str, type[BaseAgent]] = {
 }
 
 
-def get_agent(name: str) -> BaseAgent:
+def _get_agent_from_registry(name: str) -> BaseAgent:
     agent_class = AGENT_REGISTRY.get(name)
     if agent_class is None:
         available = ", ".join(sorted(AGENT_REGISTRY))
         raise ValueError(f"Unknown agent {name!r}. Available agents: {available}")
     return agent_class()
+
+
+def resolve_agent(agent_name: str | None) -> BaseAgent:
+    if agent_name:
+        return _get_agent_from_registry(agent_name)
+    config_agent = read_config().get("default_agent")
+    if config_agent:
+        return _get_agent_from_registry(config_agent)
+    available = ", ".join(sorted(AGENT_REGISTRY))
+    raise ValueError(
+        f"No agent specified. Use --agent or set default_agent in config.toml. "
+        f"Available agents: {available}"
+    )

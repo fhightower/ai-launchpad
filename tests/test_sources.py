@@ -4,7 +4,6 @@ from unittest.mock import patch, MagicMock
 
 import requests
 
-from ai_launchpad.data_models import WorkItem
 from ai_launchpad.sources import (
     BaseSource,
     LocalTodoFileSource,
@@ -103,7 +102,10 @@ class TestGitHubIssuesSource:
         source = GitHubIssuesSource("repo:a/b is:open")
         assert "Authorization" not in source._session.headers
 
-    @patch("ai_launchpad.sources.read_config", return_value={**BASE_CONFIG, "github": {"access_token": "ghp_test123"}})
+    @patch(
+        "ai_launchpad.sources.read_config",
+        return_value={**BASE_CONFIG, "github": {"access_token": "ghp_test123"}},
+    )
     def test_init_with_token(self, _mock_config):
         source = GitHubIssuesSource("repo:a/b is:open")
         assert source._session.headers["Authorization"] == "Bearer ghp_test123"
@@ -137,13 +139,19 @@ class TestGitHubIssuesSource:
 
     def test_owner_repo_from_issue_url(self):
         url = "https://github.com/octocat/Hello-World/issues/42"
-        assert GitHubIssuesSource._owner_repo_from_issue_url(url) == "octocat/Hello-World"
+        assert (
+            GitHubIssuesSource._owner_repo_from_issue_url(url) == "octocat/Hello-World"
+        )
 
     def test_owner_repo_from_issue_url_invalid(self):
-        assert GitHubIssuesSource._owner_repo_from_issue_url("https://example.com") == ""
+        assert (
+            GitHubIssuesSource._owner_repo_from_issue_url("https://example.com") == ""
+        )
 
     def test_owner_repo_from_issue_url_short(self):
-        assert GitHubIssuesSource._owner_repo_from_issue_url("https://github.com/x") == ""
+        assert (
+            GitHubIssuesSource._owner_repo_from_issue_url("https://github.com/x") == ""
+        )
 
     # --- issue to work item ---
     def test_issue_to_work_item(self):

@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import patch
 
-from ai_launchpad.agents import BaseAgent, ClaudeAgent, CodexAgent, AGENT_REGISTRY, get_agent
+from ai_launchpad.agents import (
+    BaseAgent,
+    ClaudeAgent,
+    CodexAgent,
+    AGENT_REGISTRY,
+    _get_agent_from_registry,
+)
 
 
 class TestBaseAgent:
@@ -100,17 +106,17 @@ class TestAgentRegistry:
 
 class TestGetAgent:
     def test_returns_claude_agent(self):
-        agent = get_agent("claude")
+        agent = _get_agent_from_registry("claude")
         assert isinstance(agent, ClaudeAgent)
 
     def test_returns_codex_agent(self):
-        agent = get_agent("codex")
+        agent = _get_agent_from_registry("codex")
         assert isinstance(agent, CodexAgent)
 
     def test_unknown_agent_raises(self):
         with pytest.raises(ValueError, match="Unknown agent 'nonexistent'"):
-            get_agent("nonexistent")
+            _get_agent_from_registry("nonexistent")
 
     def test_error_lists_available_agents(self):
         with pytest.raises(ValueError, match="claude"):
-            get_agent("nonexistent")
+            _get_agent_from_registry("nonexistent")

@@ -9,7 +9,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from ai_launchpad.config import read_config
-from ai_launchpad.data_models import WorkItem
+from ai_launchpad.work_items import WorkItem
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100
@@ -74,7 +74,9 @@ class LocalTodoFileSource(BaseSource):
                             title=title,
                             description="",
                             link="",
-                            relevant_source_directories=[str(self.file_path.resolve().parent)],
+                            relevant_source_directories=[
+                                str(self.file_path.resolve().parent)
+                            ],
                         )
                     )
         return work_items
@@ -244,9 +246,7 @@ class JiraJqlSource(BaseSource):
         email = str(jira_section.get("email") or "").strip()
         api_token = str(jira_section.get("api_token") or "").strip()
         if not email or not api_token:
-            raise ValueError(
-                "Set jira.email and jira.api_token in config.toml."
-            )
+            raise ValueError("Set jira.email and jira.api_token in config.toml.")
 
         self.base_url = f"https://{org_name}.atlassian.net"
         self._session = requests.Session()
