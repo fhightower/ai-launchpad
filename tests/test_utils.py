@@ -1,6 +1,4 @@
-import pytest
-
-from utils import slugify
+from ai_launchpad.utils import slugify
 
 
 class TestSlugify:
@@ -32,4 +30,7 @@ class TestSlugify:
         assert slugify("!!!") == ""
 
     def test_mixed(self):
-        assert slugify("octocat/Hello-World#42: Fix the bug!") == "octocat-hello-world-42-fix-the-bug"
+        assert (
+            slugify("octocat/Hello-World#42: Fix the bug!")
+            == "octocat-hello-world-42-fix-the-bug"
+        )

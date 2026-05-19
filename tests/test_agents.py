@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import patch
 
-from agents import BaseAgent, ClaudeAgent, CodexAgent, AGENT_REGISTRY, get_agent
+from ai_launchpad.agents import (
+    BaseAgent,
+    ClaudeAgent,
+    CodexAgent,
+    AGENT_REGISTRY,
+    _get_agent_from_registry,
+)
 
 
 class TestBaseAgent:
@@ -14,14 +20,14 @@ class TestBaseAgent:
         agent = BaseAgent()
         assert agent.cmd == ""
 
-    @patch("agents.read_config", return_value={})
+    @patch("ai_launchpad.agents.read_config", return_value={})
     def test_generate_prompt_tells_agent_to_read_task_md(self, _mock_config):
         agent = BaseAgent()
         prompt = agent.generate_prompt()
         assert "task.md" in prompt
 
     @patch(
-        "agents.read_config",
+        "ai_launchpad.agents.read_config",
         return_value={"custom_agent_message": "Be thorough!"},
     )
     def test_generate_prompt_with_custom_message(self, _mock_config):
@@ -29,7 +35,7 @@ class TestBaseAgent:
         prompt = agent.generate_prompt()
         assert "Be thorough!" in prompt
 
-    @patch("agents.read_config", return_value={})
+    @patch("ai_launchpad.agents.read_config", return_value={})
     def test_generate_prompt_does_not_contain_work_item_fields(self, _mock_config):
         agent = BaseAgent()
         prompt = agent.generate_prompt().lower()
@@ -38,7 +44,7 @@ class TestBaseAgent:
         assert "link:" not in prompt
 
     @patch(
-        "agents.read_config",
+        "ai_launchpad.agents.read_config",
         return_value={"custom_agent_message": "Be thorough!"},
     )
     def test_generate_prompt_with_custom_message_replaces_default(self, _mock_config):
@@ -46,7 +52,7 @@ class TestBaseAgent:
         prompt = agent.generate_prompt()
         assert "task.md" not in prompt
 
-    @patch("agents.read_config", return_value={})
+    @patch("ai_launchpad.agents.read_config", return_value={})
     def test_generate_prompt_without_custom_message__no_extra_blank_lines(
         self, _mock_config
     ):
@@ -100,17 +106,17 @@ class TestAgentRegistry:
 
 class TestGetAgent:
     def test_returns_claude_agent(self):
-        agent = get_agent("claude")
+        agent = _get_agent_from_registry("claude")
         assert isinstance(agent, ClaudeAgent)
 
     def test_returns_codex_agent(self):
-        agent = get_agent("codex")
+        agent = _get_agent_from_registry("codex")
         assert isinstance(agent, CodexAgent)
 
     def test_unknown_agent_raises(self):
         with pytest.raises(ValueError, match="Unknown agent 'nonexistent'"):
-            get_agent("nonexistent")
+            _get_agent_from_registry("nonexistent")
 
     def test_error_lists_available_agents(self):
         with pytest.raises(ValueError, match="claude"):
-            get_agent("nonexistent")
+            _get_agent_from_registry("nonexistent")
