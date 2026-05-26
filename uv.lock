@@ -17,7 +17,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "requests", specifier = ">=2.34.2" }]
+requires-dist = [{ name = "requests", specifier = ">=2.31.0,<=2.34.2" }]
 
 [package.metadata.requires-dev]
 dev = [
