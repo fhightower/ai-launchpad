@@ -1,3 +1,5 @@
+import json
+import re
 from abc import ABC, abstractmethod
 from typing import NoReturn
 from argparse import ArgumentParser, Namespace
@@ -16,6 +18,9 @@ GITHUB_PAGE_SIZE = 100
 REQUEST_TIMEOUT_SECONDS = 20
 JIRA_SEARCH_ENDPOINT = "/rest/api/3/search/jql"
 JIRA_PAGE_SIZE = 100
+LINEAR_API_URL = "https://api.linear.app/graphql"
+LINEAR_PAGE_SIZE = 50
+LINEAR_IDENTIFIER_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)-(\d+)$")
 
 
 class BaseSource(ABC):
@@ -383,8 +388,193 @@ class JiraJqlSource(BaseSource):
         return names
 
 
+class LinearSource(BaseSource):
+    _ISSUES_QUERY = """
+    query Issues($filter: IssueFilter, $after: String, $first: Int) {
+      issues(filter: $filter, after: $after, first: $first) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          identifier
+          title
+          description
+          url
+          labels { nodes { name } }
+        }
+      }
+    }
+    """
+
+    def __init__(self, query: str) -> None:
+        self.query = query.strip()
+        if not self.query:
+            raise ValueError("Linear query cannot be empty.")
+
+        api_key = str(read_config().get("linear", {}).get("api_key") or "").strip()
+        if not api_key:
+            raise ValueError("Set linear.api_key in config.toml.")
+
+        self.filter = self._build_filter(self.query)
+        self._session = requests.Session()
+        self._session.headers.update(
+            {
+                "Authorization": api_key,
+                "Content-Type": "application/json",
+            }
+        )
+
+    @classmethod
+    def add_arguments(cls, parser: ArgumentParser) -> None:
+        parser.add_argument(
+            "--linear-query",
+            action="append",
+            default=None,
+            metavar="QUERY",
+            help=(
+                "Linear query (can be repeated). Either an issue identifier "
+                '(e.g. "ENG-123") or a Linear IssueFilter as JSON '
+                '(e.g. \'{"team":{"key":{"eq":"ENG"}},"state":{"type":{"neq":"completed"}}}\').'
+            ),
+        )
+
+    @classmethod
+    def from_args(cls, args: Namespace) -> list["BaseSource"]:
+        queries = args.linear_query or []
+        if not queries:
+            return []
+        return [cls(query=query) for query in queries]
+
+    def get_work_items(self) -> list[WorkItem]:
+        issues = self._fetch_issues()
+        return [self._issue_to_work_item(issue) for issue in issues]
+
+    @staticmethod
+    def _build_filter(query: str) -> dict[str, Any]:
+        match = LINEAR_IDENTIFIER_RE.match(query)
+        if match:
+            team_key, number_text = match.group(1), match.group(2)
+            return {
+                "team": {"key": {"eq": team_key.upper()}},
+                "number": {"eq": int(number_text)},
+            }
+        try:
+            parsed = json.loads(query)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Linear query '{query}' is neither an issue identifier "
+                f"nor valid IssueFilter JSON: {exc}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"Linear IssueFilter JSON must decode to an object, got: {type(parsed).__name__}"
+            )
+        return parsed
+
+    def _post_graphql(
+        self, query: str, variables: dict[str, Any]
+    ) -> dict[str, Any]:
+        try:
+            response = self._session.post(
+                LINEAR_API_URL,
+                json={"query": query, "variables": variables},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException as exc:
+            self._handle_request_error(exc, LINEAR_API_URL, "Linear")
+
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Unexpected Linear response for query '{self.query}': expected an object."
+            )
+        if payload.get("errors"):
+            raise RuntimeError(
+                f"Linear API returned errors for query '{self.query}': {payload['errors']}"
+            )
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError(
+                f"Unexpected Linear response for query '{self.query}': missing data object."
+            )
+        return data
+
+    def _fetch_issues(self) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        after: str | None = None
+        while True:
+            variables: dict[str, Any] = {
+                "filter": self.filter,
+                "first": LINEAR_PAGE_SIZE,
+            }
+            if after is not None:
+                variables["after"] = after
+            data = self._post_graphql(self._ISSUES_QUERY, variables)
+            issues_block = data.get("issues")
+            if not isinstance(issues_block, dict):
+                raise RuntimeError(
+                    f"Unexpected Linear response for query '{self.query}': missing issues block."
+                )
+            nodes = issues_block.get("nodes")
+            if not isinstance(nodes, list):
+                raise RuntimeError(
+                    f"Unexpected Linear response for query '{self.query}': missing nodes list."
+                )
+            issues.extend(node for node in nodes if isinstance(node, dict))
+            page_info = issues_block.get("pageInfo")
+            if not isinstance(page_info, dict):
+                raise RuntimeError(
+                    f"Unexpected Linear response for query '{self.query}': missing pageInfo."
+                )
+            if not page_info.get("hasNextPage"):
+                break
+            end_cursor = page_info.get("endCursor")
+            if not isinstance(end_cursor, str) or not end_cursor:
+                break
+            after = end_cursor
+        return issues
+
+    def _issue_to_work_item(self, issue: dict[str, Any]) -> WorkItem:
+        identifier = str(issue.get("identifier") or "").strip()
+        summary = str(issue.get("title") or "").strip()
+        if identifier and summary:
+            title = f"{identifier}: {summary}"
+        elif identifier:
+            title = identifier
+        elif summary:
+            title = summary
+        else:
+            title = "Linear issue"
+
+        description = str(issue.get("description") or "").strip() or "No description provided."
+        link = str(issue.get("url") or "").strip() or "https://linear.app"
+        return WorkItem(
+            title=title,
+            description=description,
+            link=link,
+            relevant_source_directories=self._extract_labels(issue),
+        )
+
+    @staticmethod
+    def _extract_labels(issue: dict[str, Any]) -> list[str]:
+        labels = issue.get("labels")
+        if not isinstance(labels, dict):
+            return []
+        nodes = labels.get("nodes")
+        if not isinstance(nodes, list):
+            return []
+        names: list[str] = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            if name:
+                names.append(name)
+        return names
+
+
 SOURCE_TYPES: list[type[BaseSource]] = [
     LocalTodoFileSource,
     GitHubIssuesSource,
     JiraJqlSource,
+    LinearSource,
 ]

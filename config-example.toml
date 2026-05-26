@@ -12,3 +12,6 @@ access_token = ""
 org_name = ""
 email = ""
 api_token = ""
+
+[linear]
+api_key = ""

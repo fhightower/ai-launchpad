@@ -82,3 +82,21 @@ Required config for Jira (set in `config.toml`):
 - `jira.org_name`
 - `jira.email`
 - `jira.api_token`
+
+### Linear Sources
+
+You can load work items from Linear:
+
+```bash
+# Launch a single Linear issue by identifier
+uv run python launch.py --linear-query "ENG-123"
+
+# Pull issues using a Linear IssueFilter as JSON
+uv run python launch.py --linear-query '{"team":{"key":{"eq":"ENG"}},"state":{"type":{"neq":"completed"}}}'
+```
+
+The query is either an issue identifier (e.g. `ENG-123`) or a Linear [IssueFilter](https://developers.linear.app/docs/graphql/working-with-the-graphql-api/filtering) encoded as JSON.
+
+Required config for Linear (set in `config.toml`):
+
+- `linear.api_key` — a [Linear personal API key](https://linear.app/settings/account/security)

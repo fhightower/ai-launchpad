@@ -9,6 +9,7 @@ from ai_launchpad.sources import (
     LocalTodoFileSource,
     GitHubIssuesSource,
     JiraJqlSource,
+    LinearSource,
     SOURCE_TYPES,
 )
 
@@ -430,6 +431,229 @@ class TestJiraJqlSource:
 
 
 # ---------------------------------------------------------------------------
+# LinearSource
+# ---------------------------------------------------------------------------
+class TestLinearSource:
+    @pytest.fixture(autouse=True)
+    def _clear_config_cache(self):
+        from ai_launchpad.config import read_config
+
+        read_config.cache_clear()
+        yield
+        read_config.cache_clear()
+
+    def _make_source(self, query="ENG-1", api_key="lin_test"):
+        config = {**BASE_CONFIG, "linear": {"api_key": api_key}}
+        with patch("ai_launchpad.sources.read_config", return_value=config):
+            return LinearSource(query)
+
+    def test_empty_query_raises(self):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            self._make_source(query="")
+
+    def test_missing_api_key_raises(self):
+        config = {**BASE_CONFIG, "linear": {}}
+        with (
+            patch("ai_launchpad.sources.read_config", return_value=config),
+            pytest.raises(ValueError, match="linear.api_key"),
+        ):
+            LinearSource("ENG-1")
+
+    def test_session_sets_auth_header(self):
+        source = self._make_source(api_key="lin_abc")
+        assert source._session.headers["Authorization"] == "lin_abc"
+
+    def test_add_arguments(self):
+        parser = ArgumentParser()
+        LinearSource.add_arguments(parser)
+        args = parser.parse_args(["--linear-query", "ENG-1", "--linear-query", "ENG-2"])
+        assert args.linear_query == ["ENG-1", "ENG-2"]
+
+    def test_from_args_empty(self):
+        args = Namespace(linear_query=None)
+        assert LinearSource.from_args(args) == []
+
+    def test_from_args(self):
+        config = {**BASE_CONFIG, "linear": {"api_key": "k"}}
+        with patch("ai_launchpad.sources.read_config", return_value=config):
+            sources = LinearSource.from_args(Namespace(linear_query=["ENG-1", "ENG-2"]))
+        assert len(sources) == 2
+
+    # --- _build_filter ---
+    def test_build_filter_identifier(self):
+        assert LinearSource._build_filter("ENG-42") == {
+            "team": {"key": {"eq": "ENG"}},
+            "number": {"eq": 42},
+        }
+
+    def test_build_filter_identifier_lowercase_team(self):
+        assert LinearSource._build_filter("eng-1") == {
+            "team": {"key": {"eq": "ENG"}},
+            "number": {"eq": 1},
+        }
+
+    def test_build_filter_json(self):
+        assert LinearSource._build_filter('{"team":{"key":{"eq":"ENG"}}}') == {
+            "team": {"key": {"eq": "ENG"}}
+        }
+
+    def test_build_filter_invalid_json(self):
+        with pytest.raises(ValueError, match="neither an issue identifier"):
+            LinearSource._build_filter("not json and not identifier")
+
+    def test_build_filter_json_not_object(self):
+        with pytest.raises(ValueError, match="must decode to an object"):
+            LinearSource._build_filter("[]")
+
+    # --- _extract_labels ---
+    def test_extract_labels(self):
+        issue = {"labels": {"nodes": [{"name": "backend"}, {"name": "frontend"}]}}
+        assert LinearSource._extract_labels(issue) == ["backend", "frontend"]
+
+    def test_extract_labels_missing(self):
+        assert LinearSource._extract_labels({}) == []
+
+    def test_extract_labels_bad_shape(self):
+        assert LinearSource._extract_labels({"labels": "bad"}) == []
+        assert LinearSource._extract_labels({"labels": {"nodes": "bad"}}) == []
+
+    def test_extract_labels_skips_bad_entries(self):
+        issue = {"labels": {"nodes": ["x", {"name": ""}, {"name": "ok"}]}}
+        assert LinearSource._extract_labels(issue) == ["ok"]
+
+    # --- _issue_to_work_item ---
+    def test_issue_to_work_item(self):
+        source = self._make_source()
+        issue = {
+            "identifier": "ENG-7",
+            "title": "Fix it",
+            "description": "  body  ",
+            "url": "https://linear.app/acme/issue/ENG-7",
+            "labels": {"nodes": [{"name": "api"}]},
+        }
+        item = source._issue_to_work_item(issue)
+        assert item["title"] == "ENG-7: Fix it"
+        assert item["description"] == "body"
+        assert item["link"] == "https://linear.app/acme/issue/ENG-7"
+        assert item["relevant_source_directories"] == ["api"]
+
+    def test_issue_to_work_item_no_description(self):
+        source = self._make_source()
+        item = source._issue_to_work_item(
+            {"identifier": "ENG-1", "title": "T", "description": None, "url": "u"}
+        )
+        assert item["description"] == "No description provided."
+
+    def test_issue_to_work_item_no_identifier(self):
+        source = self._make_source()
+        item = source._issue_to_work_item({"title": "just a title"})
+        assert item["title"] == "just a title"
+
+    def test_issue_to_work_item_no_identifier_no_title(self):
+        source = self._make_source()
+        item = source._issue_to_work_item({})
+        assert item["title"] == "Linear issue"
+        assert item["link"] == "https://linear.app"
+
+    # --- pagination ---
+    def test_fetch_issues_single_page(self):
+        source = self._make_source()
+        data = {
+            "issues": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "nodes": [{"identifier": "ENG-1"}],
+            }
+        }
+        with patch.object(source, "_post_graphql", return_value=data):
+            assert source._fetch_issues() == [{"identifier": "ENG-1"}]
+
+    def test_fetch_issues_multiple_pages(self):
+        source = self._make_source()
+        pages = [
+            {
+                "issues": {
+                    "pageInfo": {"hasNextPage": True, "endCursor": "cur1"},
+                    "nodes": [{"identifier": "ENG-1"}],
+                }
+            },
+            {
+                "issues": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [{"identifier": "ENG-2"}],
+                }
+            },
+        ]
+        with patch.object(source, "_post_graphql", side_effect=pages) as mock_post:
+            result = source._fetch_issues()
+        assert result == [{"identifier": "ENG-1"}, {"identifier": "ENG-2"}]
+        assert mock_post.call_args_list[1].args[1]["after"] == "cur1"
+
+    def test_fetch_issues_missing_issues_block(self):
+        source = self._make_source()
+        with patch.object(source, "_post_graphql", return_value={}):
+            with pytest.raises(RuntimeError, match="missing issues block"):
+                source._fetch_issues()
+
+    def test_fetch_issues_missing_nodes(self):
+        source = self._make_source()
+        data = {"issues": {"pageInfo": {"hasNextPage": False}}}
+        with patch.object(source, "_post_graphql", return_value=data):
+            with pytest.raises(RuntimeError, match="missing nodes list"):
+                source._fetch_issues()
+
+    def test_fetch_issues_missing_page_info(self):
+        source = self._make_source()
+        data = {"issues": {"nodes": []}}
+        with patch.object(source, "_post_graphql", return_value=data):
+            with pytest.raises(RuntimeError, match="missing pageInfo"):
+                source._fetch_issues()
+
+    # --- _post_graphql error handling ---
+    def test_post_graphql_returns_data(self):
+        source = self._make_source()
+        response = MagicMock()
+        response.json.return_value = {"data": {"foo": 1}}
+        response.raise_for_status.return_value = None
+        with patch.object(source._session, "post", return_value=response):
+            assert source._post_graphql("q", {}) == {"foo": 1}
+
+    def test_post_graphql_errors_field(self):
+        source = self._make_source()
+        response = MagicMock()
+        response.json.return_value = {"errors": [{"message": "bad"}]}
+        response.raise_for_status.return_value = None
+        with patch.object(source._session, "post", return_value=response):
+            with pytest.raises(RuntimeError, match="returned errors"):
+                source._post_graphql("q", {})
+
+    def test_post_graphql_non_object_payload(self):
+        source = self._make_source()
+        response = MagicMock()
+        response.json.return_value = "nope"
+        response.raise_for_status.return_value = None
+        with patch.object(source._session, "post", return_value=response):
+            with pytest.raises(RuntimeError, match="expected an object"):
+                source._post_graphql("q", {})
+
+    def test_post_graphql_missing_data(self):
+        source = self._make_source()
+        response = MagicMock()
+        response.json.return_value = {}
+        response.raise_for_status.return_value = None
+        with patch.object(source._session, "post", return_value=response):
+            with pytest.raises(RuntimeError, match="missing data object"):
+                source._post_graphql("q", {})
+
+    def test_post_graphql_request_error(self):
+        source = self._make_source()
+        with patch.object(
+            source._session, "post", side_effect=requests.ConnectionError("boom")
+        ):
+            with pytest.raises(RuntimeError, match="Linear API request failed"):
+                source._post_graphql("q", {})
+
+
+# ---------------------------------------------------------------------------
 # SOURCE_TYPES registry
 # ---------------------------------------------------------------------------
 class TestSourceTypes:
@@ -437,3 +661,4 @@ class TestSourceTypes:
         assert LocalTodoFileSource in SOURCE_TYPES
         assert GitHubIssuesSource in SOURCE_TYPES
         assert JiraJqlSource in SOURCE_TYPES
+        assert LinearSource in SOURCE_TYPES
