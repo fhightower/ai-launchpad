@@ -1,3 +1,4 @@
+import shlex
 from pathlib import Path
 
 from ai_launchpad.agents import BaseAgent
@@ -31,7 +32,7 @@ def _write_cleanup_script(
         worktree_paths.append(str(home_base / source_path.name))
 
     def bash_array(items: list[str]) -> str:
-        return " ".join(f'"{item}"' for item in items)
+        return " ".join(shlex.quote(item) for item in items)
 
     template_path = Path(__file__).with_name("cleanup_template.sh")
     script = template_path.read_text(encoding="utf-8")
