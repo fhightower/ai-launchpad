@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `multiplexer` config (and `--multiplexer` flag) to choose which terminal multiplexer agents run in: `tmux` (default) or `cmux`.
+
+### Changed
+
+- Renamed the `tmux_start_dir` config to `session_start_dir`; `tmux_start_dir` still works as a fallback.
+
 ## 0.7.0
 
 ### Changed

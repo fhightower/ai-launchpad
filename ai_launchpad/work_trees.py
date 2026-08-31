@@ -1,8 +1,10 @@
 import shlex
+import textwrap
 from pathlib import Path
 
 from ai_launchpad.agents import BaseAgent
 from ai_launchpad.config import read_config
+from ai_launchpad.multiplexers import BaseMultiplexer, resolve_multiplexer
 from ai_launchpad.utils import slugify
 from ai_launchpad.work_items import (
     WorkItem,
@@ -12,13 +14,13 @@ from ai_launchpad.work_items import (
 
 
 def _write_cleanup_script(
-    home_base: Path, work_item: WorkItem, agent: BaseAgent
+    home_base: Path, work_item: WorkItem, multiplexer: BaseMultiplexer
 ) -> None:
     config = read_config()
     base_source_dir = config["base_source_dir"]
     base_worktrees_dir = config["base_worktrees_dir"]
 
-    tmux_sessions = [f"{home_base.name}"]
+    sessions = [f"{home_base.name}"]
 
     source_repos = []
     worktree_paths = []
@@ -38,7 +40,13 @@ def _write_cleanup_script(
     script = template_path.read_text(encoding="utf-8")
     script = script.replace("__CONTEXT_NAME__", home_base.name)
     script = script.replace("__HOME_BASE__", str(home_base))
-    script = script.replace("__TMUX_SESSIONS__", bash_array(tmux_sessions))
+    script = script.replace("__MULTIPLEXER__", multiplexer.name)
+    script = script.replace("__SESSION_NOUN__", multiplexer.session_noun)
+    script = script.replace("__SESSIONS__", bash_array(sessions))
+    script = script.replace(
+        "__KILL_SESSION_BODY__",
+        textwrap.indent(multiplexer.cleanup_script_body(), "    "),
+    )
     script = script.replace("__SOURCE_REPOS__", bash_array(source_repos))
     script = script.replace("__WORKTREE_PATHS__", bash_array(worktree_paths))
     script = script.replace("__BASE_WORKTREES_DIR__", str(base_worktrees_dir))
@@ -74,11 +82,17 @@ def _create_home_base(work_item_sluggified_title: str) -> Path:
     return home_base
 
 
-def setup_worktree(work_item: WorkItem, agent: BaseAgent) -> Path:
+def setup_worktree(
+    work_item: WorkItem,
+    agent: BaseAgent,
+    multiplexer: BaseMultiplexer | None = None,
+) -> Path:
     sluggified_title = slugify(work_item["title"])
     context_name = f"{sluggified_title}-{slugify(agent.name)}"
     home_base = _create_home_base(context_name)
     copy_relevant_sources(work_item, home_base)
-    _write_cleanup_script(home_base, work_item, agent)
+    if multiplexer is None:
+        multiplexer = resolve_multiplexer()
+    _write_cleanup_script(home_base, work_item, multiplexer)
     _write_task_file(home_base, work_item)
     return home_base

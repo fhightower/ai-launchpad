@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from ai_launchpad.agents import ClaudeAgent, CodexAgent, resolve_agent
+from ai_launchpad.multiplexers import CmuxMultiplexer, TmuxMultiplexer
 from ai_launchpad.work_items import (
     WorkItem,
     get_work_items,
@@ -201,13 +202,13 @@ class TestWriteCleanupScript:
         home_base = tmp_path / "my-task-claude"
         home_base.mkdir()
         item = _make_work_item(relevant_source_directories=["repo-a"])
-        agent = ClaudeAgent()
-        _write_cleanup_script(home_base, item, agent)
+        _write_cleanup_script(home_base, item, TmuxMultiplexer())
         cleanup = home_base / "cleanup.sh"
         assert cleanup.exists()
         content = cleanup.read_text()
         assert "my-task-claude" in content
         assert "/src/repo-a" in content
+        assert "tmux kill-session" in content
 
     @patch(
         "ai_launchpad.work_trees.read_config",
@@ -217,8 +218,7 @@ class TestWriteCleanupScript:
         home_base = tmp_path / "task"
         home_base.mkdir()
         item = _make_work_item()
-        agent = ClaudeAgent()
-        _write_cleanup_script(home_base, item, agent)
+        _write_cleanup_script(home_base, item, TmuxMultiplexer())
         cleanup = home_base / "cleanup.sh"
         assert cleanup.stat().st_mode & 0o755
 
@@ -230,8 +230,7 @@ class TestWriteCleanupScript:
         home_base = tmp_path / "task"
         home_base.mkdir()
         item = _make_work_item(relevant_source_directories=["/absolute/repo"])
-        agent = ClaudeAgent()
-        _write_cleanup_script(home_base, item, agent)
+        _write_cleanup_script(home_base, item, TmuxMultiplexer())
         content = (home_base / "cleanup.sh").read_text()
         assert "/absolute/repo" in content
 
@@ -243,10 +242,24 @@ class TestWriteCleanupScript:
         home_base = tmp_path / "task"
         home_base.mkdir()
         item = _make_work_item(relevant_source_directories=["Foo Bar"])
-        agent = ClaudeAgent()
-        _write_cleanup_script(home_base, item, agent)
+        _write_cleanup_script(home_base, item, TmuxMultiplexer())
         content = (home_base / "cleanup.sh").read_text()
         assert "/src/foo-bar" in content
+
+    @patch(
+        "ai_launchpad.work_trees.read_config",
+        return_value={"base_source_dir": "/src", "base_worktrees_dir": "/contexts"},
+    )
+    def test_cmux_cleanup_script_closes_workspace(self, _mock_config, tmp_path):
+        home_base = tmp_path / "my-task-claude"
+        home_base.mkdir()
+        item = _make_work_item()
+        _write_cleanup_script(home_base, item, CmuxMultiplexer())
+        content = (home_base / "cleanup.sh").read_text()
+        assert "cmux close-workspace" in content
+        assert "tmux kill-session" not in content
+        assert 'MULTIPLEXER="cmux"' in content
+        assert 'SESSION_NOUN="workspace"' in content
 
 
 # ---------------------------------------------------------------------------
@@ -419,103 +432,117 @@ class TestStartAgentInContext:
         with pytest.raises(ValueError, match="empty"):
             agent.start_agent_in_context(tmp_path, "prompt")
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch("ai_launchpad.agents.read_config", return_value={})
     def test_passes_prompt_to_agent_command(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
-        CodexAgent().start_agent_in_context(tmp_path, "my prompt")
+        CodexAgent().start_agent_in_context(tmp_path, "my prompt", TmuxMultiplexer())
         first_call = mock_run.call_args_list[0].args[0]
         assert "tmux" in first_call
         assert "new-session" in first_call
         assert first_call[-1] == "codex 'my prompt'"
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch("ai_launchpad.agents.read_config", return_value={})
     def test_session_name_is_context_path_name(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
-        ClaudeAgent().start_agent_in_context(context, "prompt")
+        ClaudeAgent().start_agent_in_context(context, "prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         s_index = cmd.index("-s")
         assert cmd[s_index + 1] == "fix-bug-claude"
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch("ai_launchpad.agents.read_config", return_value={})
     def test_claude_includes_name_flag(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
         context = tmp_path / "fix-bug-claude"
         context.mkdir()
-        ClaudeAgent().start_agent_in_context(context, "my prompt")
+        ClaudeAgent().start_agent_in_context(context, "my prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "claude -n fix-bug-claude 'my prompt'"
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch("ai_launchpad.agents.read_config", return_value={})
     def test_codex_does_not_include_name_flag(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
         context = tmp_path / "fix-bug-codex"
         context.mkdir()
-        CodexAgent().start_agent_in_context(context, "my prompt")
+        CodexAgent().start_agent_in_context(context, "my prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         assert cmd[-1] == "codex 'my prompt'"
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch("ai_launchpad.agents.read_config", return_value={})
     def test_defaults_to_context_path(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
-        ClaudeAgent().start_agent_in_context(tmp_path, "prompt")
+        ClaudeAgent().start_agent_in_context(tmp_path, "prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
     @patch(
         "ai_launchpad.agents.read_config",
-        return_value={"tmux_start_dir": "/custom/dir"},
+        return_value={"session_start_dir": "/custom/dir"},
     )
-    def test_uses_configured_tmux_start_dir(
+    def test_uses_configured_session_start_dir(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
-        ClaudeAgent().start_agent_in_context(tmp_path, "prompt")
+        ClaudeAgent().start_agent_in_context(tmp_path, "prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == "/custom/dir"
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
-    @patch("ai_launchpad.agents.read_config", return_value={"tmux_start_dir": ""})
-    def test_empty_tmux_start_dir_falls_back_to_context_path(
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
+    @patch(
+        "ai_launchpad.agents.read_config",
+        return_value={"tmux_start_dir": "/legacy/dir"},
+    )
+    def test_falls_back_to_legacy_tmux_start_dir(
         self, _mock_config, mock_run, _mock_sleep, tmp_path
     ):
-        ClaudeAgent().start_agent_in_context(tmp_path, "prompt")
+        ClaudeAgent().start_agent_in_context(tmp_path, "prompt", TmuxMultiplexer())
+        cmd = mock_run.call_args_list[0].args[0]
+        c_index = cmd.index("-c")
+        assert cmd[c_index + 1] == "/legacy/dir"
+
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
+    @patch("ai_launchpad.agents.read_config", return_value={"session_start_dir": ""})
+    def test_empty_session_start_dir_falls_back_to_context_path(
+        self, _mock_config, mock_run, _mock_sleep, tmp_path
+    ):
+        ClaudeAgent().start_agent_in_context(tmp_path, "prompt", TmuxMultiplexer())
         cmd = mock_run.call_args_list[0].args[0]
         c_index = cmd.index("-c")
         assert cmd[c_index + 1] == str(tmp_path)
 
-    @patch("ai_launchpad.agents.time.sleep")
-    @patch("ai_launchpad.agents.subprocess.run")
+    @patch("ai_launchpad.multiplexers.time.sleep")
+    @patch("ai_launchpad.multiplexers.subprocess.run")
+    @patch(
+        "ai_launchpad.multiplexers.read_config", return_value={"multiplexer": "cmux"}
+    )
     @patch("ai_launchpad.agents.read_config", return_value={})
-    def test_sends_enter_to_accept_trust_prompt(
-        self, _mock_config, mock_run, mock_sleep, tmp_path
+    def test_resolves_multiplexer_from_config_when_not_given(
+        self, _mock_agent_config, _mock_mux_config, mock_run, _mock_sleep, tmp_path
     ):
-        context = tmp_path / "fix-bug-claude"
-        context.mkdir()
-        ClaudeAgent().start_agent_in_context(context, "prompt")
-        mock_sleep.assert_called_once_with(2)
-        send_keys_call = mock_run.call_args_list[1].args[0]
-        assert send_keys_call == ["tmux", "send-keys", "-t", "fix-bug-claude", "Enter"]
+        mock_run.return_value = MagicMock(stdout="OK workspace:7\n")
+        ClaudeAgent().start_agent_in_context(tmp_path, "prompt")
+        assert mock_run.call_args_list[0].args[0][0] == "cmux"
 
 
 # ---------------------------------------------------------------------------
@@ -557,10 +584,11 @@ class TestSetupWorktree:
         (tmp_path / "ctx").mkdir()
         item = _make_work_item()
         agent = ClaudeAgent()
-        result = setup_worktree(item, agent)
+        multiplexer = TmuxMultiplexer()
+        result = setup_worktree(item, agent, multiplexer)
         mock_home.assert_called_once()
         mock_copy.assert_called_once_with(item, tmp_path / "ctx")
-        mock_cleanup.assert_called_once_with(tmp_path / "ctx", item, agent)
+        mock_cleanup.assert_called_once_with(tmp_path / "ctx", item, multiplexer)
         mock_task.assert_called_once_with(tmp_path / "ctx", item)
         assert result == tmp_path / "ctx"
 
@@ -574,7 +602,7 @@ class TestSetupWorktree:
         mock_home.return_value = tmp_path / "fix-bug-claude"
         item = _make_work_item(title="Fix bug")
         agent = ClaudeAgent()
-        setup_worktree(item, agent)
+        setup_worktree(item, agent, TmuxMultiplexer())
         mock_home.assert_called_once_with("fix-bug-claude")
 
     @patch("ai_launchpad.work_trees._write_task_file")
@@ -587,7 +615,7 @@ class TestSetupWorktree:
         mock_home.return_value = tmp_path / "fix-bug-codex"
         item = _make_work_item(title="Fix bug")
         agent = CodexAgent()
-        setup_worktree(item, agent)
+        setup_worktree(item, agent, TmuxMultiplexer())
         mock_home.assert_called_once_with("fix-bug-codex")
 
     @patch("ai_launchpad.work_trees._write_task_file")
@@ -600,8 +628,8 @@ class TestSetupWorktree:
         item = _make_work_item(title="Fix bug")
         mock_home.side_effect = lambda name: tmp_path / name
 
-        path_claude = setup_worktree(item, ClaudeAgent())
-        path_codex = setup_worktree(item, CodexAgent())
+        path_claude = setup_worktree(item, ClaudeAgent(), TmuxMultiplexer())
+        path_codex = setup_worktree(item, CodexAgent(), TmuxMultiplexer())
 
         assert path_claude.name == "fix-bug-claude"
         assert path_codex.name == "fix-bug-codex"
@@ -617,8 +645,23 @@ class TestSetupWorktree:
         mock_home.return_value = tmp_path / "fix-the-login-bug-42-claude"
         item = _make_work_item(title="Fix the Login Bug #42!")
         agent = ClaudeAgent()
-        setup_worktree(item, agent)
+        setup_worktree(item, agent, TmuxMultiplexer())
         mock_home.assert_called_once_with("fix-the-login-bug-42-claude")
+
+    @patch("ai_launchpad.work_trees._write_task_file")
+    @patch("ai_launchpad.work_trees._write_cleanup_script")
+    @patch("ai_launchpad.work_trees.copy_relevant_sources")
+    @patch("ai_launchpad.work_trees._create_home_base")
+    @patch("ai_launchpad.work_trees.resolve_multiplexer")
+    def test_resolves_multiplexer_when_not_given(
+        self, mock_resolve, mock_home, mock_copy, mock_cleanup, mock_task, tmp_path
+    ):
+        mock_home.return_value = tmp_path / "ctx"
+        mock_resolve.return_value = CmuxMultiplexer()
+        item = _make_work_item()
+        setup_worktree(item, ClaudeAgent())
+        mock_resolve.assert_called_once_with()
+        assert mock_cleanup.call_args.args[2] is mock_resolve.return_value
 
 
 # ---------------------------------------------------------------------------
@@ -628,9 +671,16 @@ class TestStartLaunchSequence:
     @patch("ai_launchpad.agents.read_config", return_value={})
     @patch("ai_launchpad.launch.setup_worktree")
     @patch("ai_launchpad.launch.get_work_items")
+    @patch("ai_launchpad.launch.resolve_multiplexer")
     @patch("ai_launchpad.launch.resolve_agent")
     def test_processes_items(
-        self, mock_resolve, mock_get, mock_setup, _mock_read_config, tmp_path
+        self,
+        mock_resolve,
+        mock_resolve_multiplexer,
+        mock_get,
+        mock_setup,
+        _mock_read_config,
+        tmp_path,
     ):
         item = _make_work_item()
         mock_get.return_value = [item]
@@ -638,32 +688,57 @@ class TestStartLaunchSequence:
         agent = MagicMock(spec=ClaudeAgent)
         agent.generate_prompt.return_value = "Read task.md please"
         mock_resolve.return_value = agent
+        multiplexer = TmuxMultiplexer()
+        mock_resolve_multiplexer.return_value = multiplexer
 
         start_launch_sequence(["--agent", "claude"])
 
-        mock_setup.assert_called_once_with(item, agent)
+        mock_setup.assert_called_once_with(item, agent, multiplexer)
         agent.start_agent_in_context.assert_called_once()
         call_args = agent.start_agent_in_context.call_args.args
         assert call_args[0] == tmp_path
         assert "task.md" in call_args[1]
 
     @patch("ai_launchpad.launch.get_work_items", return_value=[])
+    @patch("ai_launchpad.launch.resolve_multiplexer")
     @patch("ai_launchpad.launch.resolve_agent")
-    def test_parses_agent_arg(self, mock_resolve, _mock_get):
+    def test_parses_agent_arg(self, mock_resolve, _mock_multiplexer, _mock_get):
         mock_resolve.return_value = ClaudeAgent()
         start_launch_sequence(["--agent", "claude"])
         mock_resolve.assert_called_once_with("claude")
 
     @patch("ai_launchpad.launch.get_work_items", return_value=[])
+    @patch("ai_launchpad.launch.resolve_multiplexer")
     @patch("ai_launchpad.launch.resolve_agent")
-    def test_default_agent_is_none(self, mock_resolve, _mock_get):
+    def test_default_agent_is_none(self, mock_resolve, _mock_multiplexer, _mock_get):
         mock_resolve.return_value = ClaudeAgent()
         start_launch_sequence([])
         mock_resolve.assert_called_once_with(None)
 
     @patch("ai_launchpad.launch.get_work_items", return_value=[])
     @patch("ai_launchpad.launch.resolve_agent")
-    def test_passes_sources_from_args(self, mock_resolve, mock_get, tmp_path):
+    @patch("ai_launchpad.launch.resolve_multiplexer")
+    def test_parses_multiplexer_arg(self, mock_multiplexer, mock_resolve, _mock_get):
+        mock_resolve.return_value = ClaudeAgent()
+        start_launch_sequence(["--multiplexer", "cmux"])
+        mock_multiplexer.assert_called_once_with("cmux")
+
+    @patch("ai_launchpad.launch.get_work_items", return_value=[])
+    @patch("ai_launchpad.launch.resolve_agent")
+    @patch("ai_launchpad.launch.resolve_multiplexer")
+    def test_default_multiplexer_is_none(
+        self, mock_multiplexer, mock_resolve, _mock_get
+    ):
+        mock_resolve.return_value = ClaudeAgent()
+        start_launch_sequence([])
+        mock_multiplexer.assert_called_once_with(None)
+
+    @patch("ai_launchpad.launch.get_work_items", return_value=[])
+    @patch("ai_launchpad.launch.resolve_multiplexer")
+    @patch("ai_launchpad.launch.resolve_agent")
+    def test_passes_sources_from_args(
+        self, mock_resolve, _mock_multiplexer, mock_get, tmp_path
+    ):
         todo = tmp_path / "todo.txt"
         todo.write_text("- Task one\n")
         mock_resolve.return_value = ClaudeAgent()

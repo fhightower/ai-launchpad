@@ -3,16 +3,23 @@ set -euo pipefail
 
 CONTEXT_NAME="__CONTEXT_NAME__"
 HOME_BASE="__HOME_BASE__"
-TMUX_SESSIONS=(__TMUX_SESSIONS__)
+MULTIPLEXER="__MULTIPLEXER__"
+SESSION_NOUN="__SESSION_NOUN__"
+SESSIONS=(__SESSIONS__)
 SOURCE_REPOS=(__SOURCE_REPOS__)
 WORKTREE_PATHS=(__WORKTREE_PATHS__)
 BASE_WORKTREES_DIR="__BASE_WORKTREES_DIR__"
 
+kill_session() {
+    local session="$1"
+__KILL_SESSION_BODY__
+}
+
 echo "=== Cleanup: $CONTEXT_NAME ==="
 echo ""
 echo "This will:"
-for session in "${TMUX_SESSIONS[@]}"; do
-    echo "  - Kill tmux session: $session"
+for session in "${SESSIONS[@]}"; do
+    echo "  - Kill $MULTIPLEXER $SESSION_NOUN: $session"
 done
 for wt in "${WORKTREE_PATHS[@]}"; do
     echo "  - Remove worktree: $wt"
@@ -27,10 +34,10 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
 fi
 
 echo ""
-echo "Killing tmux sessions..."
-for session in "${TMUX_SESSIONS[@]}"; do
+echo "Killing $MULTIPLEXER ${SESSION_NOUN}s..."
+for session in "${SESSIONS[@]}"; do
     echo "  Killing: $session"
-    tmux kill-session -t "$session" 2>/dev/null || echo "  Session not found: $session"
+    kill_session "$session"
 done
 
 echo "Removing worktrees..."

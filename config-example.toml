@@ -3,7 +3,8 @@ base_worktrees_dir = ""
 expected_source_repo_branch = ""
 custom_agent_message = ""
 default_agent = "codex"
-tmux_start_dir = ""  # Optional: directory where tmux sessions start (defaults to context path)
+multiplexer = "tmux"  # Optional: terminal multiplexer to run agents in ("tmux" or "cmux")
+session_start_dir = ""  # Optional: directory where agent sessions start (defaults to context path)
 
 [github]
 access_token = ""

@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 
 from ai_launchpad.agents import AGENT_REGISTRY, resolve_agent
+from ai_launchpad.multiplexers import MULTIPLEXER_REGISTRY, resolve_multiplexer
 from ai_launchpad.sources import BaseSource, SOURCE_TYPES
 from ai_launchpad.work_items import (
     get_work_items,
@@ -22,6 +23,15 @@ def _setup_parser():
         help=f"Agent to use (available: {available_agents}). "
         "Overrides default_agent in config.toml.",
     )
+    available_multiplexers = ", ".join(sorted(MULTIPLEXER_REGISTRY))
+    parser.add_argument(
+        "--multiplexer",
+        default=None,
+        metavar="NAME",
+        help=f"Terminal multiplexer to run agents in "
+        f"(available: {available_multiplexers}). "
+        "Overrides multiplexer in config.toml.",
+    )
     return parser
 
 
@@ -34,11 +44,12 @@ def start_launch_sequence(argv: list[str] | None = None) -> None:
         sources.extend(source_type.from_args(args))
 
     agent = resolve_agent(args.agent)
+    multiplexer = resolve_multiplexer(args.multiplexer)
 
     for work_item in get_work_items(sources):
-        context_path = setup_worktree(work_item, agent)
+        context_path = setup_worktree(work_item, agent, multiplexer)
         prompt = agent.generate_prompt()
-        agent.start_agent_in_context(context_path, prompt)
+        agent.start_agent_in_context(context_path, prompt, multiplexer)
 
 
 if __name__ == "__main__":

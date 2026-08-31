@@ -1,8 +1,13 @@
-import subprocess
-import time
 from pathlib import Path
 
 from ai_launchpad.config import read_config
+from ai_launchpad.multiplexers import BaseMultiplexer, resolve_multiplexer
+
+
+def resolve_session_start_dir(context_path: Path) -> str:
+    config = read_config()
+    start_dir = config.get("session_start_dir") or config.get("tmux_start_dir")
+    return start_dir or str(context_path)
 
 
 class BaseAgent:
@@ -22,34 +27,21 @@ class BaseAgent:
             return custom_message
         return "Read task.md for your work item. Feel free to ask me any questions!"
 
-    def start_agent_in_context(self, context_path: Path, agent_prompt: str) -> None:
+    def start_agent_in_context(
+        self,
+        context_path: Path,
+        agent_prompt: str,
+        multiplexer: BaseMultiplexer | None = None,
+    ) -> None:
         if not self.cmd:
             raise ValueError("Agent command is empty.")
         session_name = context_path.name
         launch_cmd = self.build_launch_cmd(session_name, agent_prompt)
+        start_dir = resolve_session_start_dir(context_path)
 
-        start_dir = read_config().get("tmux_start_dir") or str(context_path)
-
-        subprocess.run(
-            [
-                "tmux",
-                "new-session",
-                "-s",
-                session_name,
-                "-d",
-                "-c",
-                start_dir,
-                launch_cmd,
-            ],
-            check=True,
-        )
-
-        # Accept the agent's initial directory trust prompt
-        time.sleep(2)
-        subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "Enter"],
-            check=False,
-        )
+        if multiplexer is None:
+            multiplexer = resolve_multiplexer()
+        multiplexer.start_session(session_name, start_dir, launch_cmd)
 
 
 class ClaudeAgent(BaseAgent):

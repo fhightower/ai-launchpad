@@ -14,6 +14,8 @@ The first time you are setting up this project, you will need to:
 Optional config:
 
 - `expected_source_repo_branch` (example: `"dev"`): if set, Launchpad will pause before creating each worktree until the source repo is on this branch.
+- `multiplexer` (`"tmux"` or `"cmux"`, defaults to `"tmux"`): which terminal multiplexer to start agent sessions in. Override per run with `--multiplexer`.
+- `session_start_dir` (example: `"~/code"`): if set, agent sessions start in this directory instead of the work item's context path.
 
 ## Quickstart
 
